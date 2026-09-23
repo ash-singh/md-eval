@@ -1,6 +1,6 @@
 [project]
 name = "md-eval"
-version = "0.2.0"
+version = "0.3.0"
 description = "Evaluate technical docs / RFCs on multiple dimensions with the TypeSafe API"
 readme = "README.md"
 authors = [
