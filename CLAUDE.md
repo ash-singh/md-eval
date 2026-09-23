@@ -17,6 +17,7 @@ uv run md-eval examples --reader both --details
 uv run md-eval examples --json -               # JSON on stdout, table on stderr
 uv run md-eval examples --dry-run              # print request + token estimates, no API call
 uv run python scripts/screenshots.py           # regenerate README screenshots in docs/ (calls the API)
+scripts/release.sh 0.2.0                       # cut a release: versions, plugin pins, commit, tag
 ```
 
 - Real runs need `TYPESAFE_API_KEY`, read from the environment or a `.env` found by searching
@@ -85,9 +86,11 @@ secret scanning.
 The repo root is a plugin marketplace (`.claude-plugin/marketplace.json`) with two plugins:
 `plugins/md-eval` (the `eval-docs` skill, which documents how to run the CLI and read its
 JSON output) and `plugins/md-eval-plan-gate` (a `hooks.json` wiring `md-eval-plan-hook`
-to `ExitPlanMode`). Both run the CLI from GitHub via `uvx --from git+https://github.com/ash-singh/md-eval`,
-so plugin users get whatever is on `main`.
+to `ExitPlanMode`). Both run the CLI from GitHub via
+`uvx --from git+https://github.com/ash-singh/md-eval@vX.Y.Z`, pinned to a release tag, so
+pushes to `main` don't reach plugin users until the next release.
 
 - Update `plugins/md-eval/skills/eval-docs/SKILL.md` if CLI flags or JSON fields change.
-- Bump `version` in a plugin's `plugin.json` when its files change, so installs update.
-- Check manifests with `claude plugin validate .` (and on each plugin directory).
+- Release with `scripts/release.sh X.Y.Z`, then `git push origin main vX.Y.Z`. It sets one
+  version in `pyproject.toml` and both `plugin.json` files, re-pins the uvx sources, validates
+  the manifests, commits and tags. Don't edit versions or pins by hand.
