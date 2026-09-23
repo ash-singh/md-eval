@@ -105,6 +105,12 @@ async def evaluate_doc(
             result.error = f"{type(e).__name__}: {e}"
             return result
 
+    fill_result(result, dims, response)
+    return result
+
+
+def fill_result(result: DocResult, dims: tuple[Dimension, ...], response) -> None:
+    """Copy the answers for `dims` from a TypeSafe response into `result`."""
     result.model = response.model
     result.input_tokens = response.usage.input_tokens
     for d in dims:
@@ -118,7 +124,6 @@ async def evaluate_doc(
                 confidence=answer.confidence,
                 probabilities=dict(answer.probabilities),
             )
-    return result
 
 
 async def evaluate_all(

@@ -24,7 +24,7 @@ if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   exit 1
 fi
 
-# One version number: the Python package and both plugins.
+# One version number: the Python package and every plugin.
 perl -pi -e "s/^version = \"[^\"]*\"/version = \"$version\"/" pyproject.toml
 for manifest in plugins/*/.claude-plugin/plugin.json; do
   perl -pi -e "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" "$manifest"

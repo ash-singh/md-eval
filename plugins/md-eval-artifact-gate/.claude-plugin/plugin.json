@@ -1,0 +1,11 @@
+{
+  "name": "md-eval-artifact-gate",
+  "version": "0.2.0",
+  "description": "Checks each written page with md-eval before Claude publishes it as an artifact: sends back weak writing once, and pages with secrets, PII or unfinished content.",
+  "author": {
+    "name": "Ashwani Singh",
+    "url": "https://github.com/ash-singh"
+  },
+  "homepage": "https://github.com/ash-singh/md-eval",
+  "repository": "https://github.com/ash-singh/md-eval"
+}

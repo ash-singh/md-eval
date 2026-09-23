@@ -3,6 +3,7 @@
 A CLI that scores Markdown technical documents and RFCs using [TypeSafe](https://docs.typesafe.ai)
 (Jev System One model). It can evaluate a document for **human readers**, for
 **AI coding agents** that will implement from it, or both (`--reader agent|human|both`, default `agent`).
+`--reader page` judges general writing instead (reports, write-ups, explainers).
 Each document goes out as one request, and the model answers every question in parallel:
 
 | Reader | Group | Dimensions | Primitive |
@@ -10,6 +11,7 @@ Each document goes out as one request, and the model answers every question in p
 | human | Writing quality | Clarity, Structure, Concision, Audience fit | Score (5 levels) |
 | human | Content substance | Problem & motivation, Design completeness, Alternatives & trade-offs, Risks & rollout | Score (5 levels) |
 | agent | AI agent readiness | Actionability, Explicitness, Codebase grounding, Interface precision, Verifiability, Scope boundaries, Self-contained | Score (5 levels) |
+| page | Published page | Main point, Clarity, Structure, Concision | Score (5 levels) |
 | all | Risk flags | Unfinished (TBD/TODO), Unsupported claims, Secrets, PII, Contradictions | Noul (P(yes)) |
 
 Scores are normalized to 0–100 and combined **in code** into a weighted total per
@@ -57,6 +59,7 @@ uv run md-eval examples/                        # agent-readiness of every .md/.
 uv run md-eval rfc-*.md --details               # per-dimension breakdown with the chosen level
 uv run md-eval specs/ --reader human             # evaluate for human readers instead
 uv run md-eval specs/ --reader both --details    # human and agent scores side by side
+uv run md-eval report.md --reader page           # general writing: reports, write-ups, explainers
 uv run md-eval docs/ --audience "SREs new to the payments stack"
 uv run md-eval docs/ --weight design_completeness=3 --weight agent_verifiability=2
 uv run md-eval docs/ --json results.json        # raw scores, confidences, level probabilities
@@ -106,7 +109,7 @@ decision in `context`.
 
 ## Use with Claude Code
 
-This repo is also a Claude Code plugin marketplace with two plugins:
+This repo is also a Claude Code plugin marketplace with three plugins:
 
 - **`md-eval`**: two skills. `eval-docs`: ask Claude to "review this spec" or "is this
   doc ready for an agent?" and it runs md-eval and reports the scores. `decide-options`:
@@ -118,15 +121,22 @@ This repo is also a Claude Code plugin marketplace with two plugins:
   back once with its weakest dimensions so Claude can fill the gaps. For example, a
   one-line "add caching" plan scored 23 and was sent back, and a plan with files, steps
   and test commands scored 89 and went straight through.
+- **`md-eval-artifact-gate`** (optional): a hook that checks each written page before
+  Claude publishes it as an artifact. It sends a page back once when its writing scores
+  below 60/100 for its readers, or when it raises the Secrets, PII, Unfinished or
+  Contradictions flag. Apps, dashboards and games are only checked for flags, not judged
+  as prose. Pages under 150 words, and republishes with unchanged text, aren't checked.
 
 Setup needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and a TypeSafe
-key. Neither plugin needs a separate install. They run md-eval through `uvx`, pinned to
-the release tag that matches the plugin version.
+key. No plugin needs a separate install. They run md-eval through `uvx`, pinned to the
+release tag that matches the plugin version. The skills and gates send the text they
+check (docs, decisions, plans, pages) to the TypeSafe API.
 
 ```sh
 claude plugin marketplace add ash-singh/md-eval
 claude plugin install md-eval@md-eval
 claude plugin install md-eval-plan-gate@md-eval          # optional
+claude plugin install md-eval-artifact-gate@md-eval      # optional
 echo 'export TYPESAFE_API_KEY=...' >> ~/.zshrc           # from https://console.typesafe.ai
 ```
 
@@ -145,15 +155,21 @@ The skill triggers on requests like these:
 Claude runs md-eval, reports the total, the weakest dimensions and any raised flags, and
 when asked, edits the doc and re-runs it to show before and after scores.
 
-The plan gate needs no prompting. Use plan mode as usual. When a plan is sent back, you
-see `md-eval: plan scored N/100 for agent readiness — sent back for revision` and Claude
-revises it. It asks you when a gap needs your input.
+The gates need no prompting. Use plan mode and artifacts as usual. When a plan is sent
+back, you see `md-eval: plan scored N/100 for agent readiness — sent back for revision`
+and Claude revises it, asking you when a gap needs your input. When a page is sent back,
+Claude improves the writing it produced itself, removes anything that looks like a
+credential, and asks you before removing personal details. It doesn't rewrite content you
+supplied. If you want the page as it is, ask Claude to publish again: each file is sent
+back at most once per session.
 
-### Plan gate settings
+The artifact gate only sees pages published with the Artifact tool. Documents written
+through a docs connector (such as Claude Docs) aren't checked.
 
-The plan gate lets plans through
-if anything goes wrong (network, oversized plan). The plan gate lets plans through if anything goes wrong (network, oversized plan).
-Without a key it says so once per session. Tune it with environment variables:
+### Gate settings
+
+Both gates let Claude continue if anything goes wrong (network, oversized text). Without
+a key, each says so once per session. Tune them with environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -161,6 +177,13 @@ Without a key it says so once per session. Tune it with environment variables:
 | `MD_EVAL_PLAN_FLAG_THRESHOLD` | `0.5` | Send back plans with a flag at or above this P(yes) |
 | `MD_EVAL_PLAN_MAX_BLOCKS` | `1` | Times a plan can be sent back per session |
 | `MD_EVAL_PLAN_MIN_CONFIDENCE` | `0.5` | Mark scores below this confidence as low confidence |
+| `MD_EVAL_ARTIFACT_MIN_SCORE` | `0.6` | Send back written pages whose page total is below this (0-1) |
+| `MD_EVAL_ARTIFACT_BLOCK_FLAGS` | `secrets,pii,unfinished_content,contradictions` | Flags that send a page back (comma-separated flag ids) |
+| `MD_EVAL_ARTIFACT_FLAG_THRESHOLD` | `0.5` | P(yes) at which a flag counts as raised |
+| `MD_EVAL_ARTIFACT_MAX_BLOCKS` | `1` | Times each file can be sent back per session |
+| `MD_EVAL_ARTIFACT_MIN_WORDS` | `150` | Pages with fewer words are not checked |
+| `MD_EVAL_ARTIFACT_DOC_THRESHOLD` | `0.5` | P(written document) at which a page's writing is scored |
+| `MD_EVAL_ARTIFACT_MIN_CONFIDENCE` | `0.5` | Mark scores below this confidence as low confidence |
 
 ### Update, disable, remove
 
@@ -168,8 +191,9 @@ Without a key it says so once per session. Tune it with environment variables:
 claude plugin marketplace update md-eval                 # fetch the latest release list
 claude plugin update md-eval@md-eval                     # then restart Claude Code
 claude plugin update md-eval-plan-gate@md-eval
-claude plugin disable md-eval-plan-gate@md-eval          # turn the gate off, keep it installed
-claude plugin uninstall md-eval-plan-gate@md-eval        # remove it
+claude plugin update md-eval-artifact-gate@md-eval
+claude plugin disable md-eval-plan-gate@md-eval          # turn a gate off, keep it installed
+claude plugin uninstall md-eval-artifact-gate@md-eval    # remove it
 ```
 
 Plugins change only when a new release is published. Commits to `main` don't affect
@@ -184,7 +208,7 @@ scripts/release.sh 0.2.0
 git push origin main v0.2.0
 ```
 
-The script sets one version in `pyproject.toml` and both `plugin.json` files, re-pins the
+The script sets one version in `pyproject.toml` and every `plugin.json` file, re-pins the
 plugins' `uvx` sources to the new tag, runs `claude plugin validate`, then commits and
 tags. Update the skills in `plugins/md-eval/skills/` first if CLI flags or JSON
 fields changed.

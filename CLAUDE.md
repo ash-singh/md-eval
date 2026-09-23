@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `md-eval` is a Python CLI that scores Markdown docs (specs, RFCs, task docs) using the
 TypeSafe System One API (`typesafe-sdk`, model `jev-latest`). It evaluates a doc for an
-AI coding agent (default), for human readers, or both (`--reader agent|human|both`).
+AI coding agent (default), for human readers, or both (`--reader agent|human|both`), or as
+general writing on a published page (`--reader page`). `md-eval decide` scores options for
+a decision. Two Claude Code hooks gate plans and published artifacts.
 
 ## Commands
 
@@ -35,7 +37,7 @@ Modules in `src/md_eval/`, driven by one data table:
 
 - **`dimensions.py` is the single source of truth.** Every judgment is a `Dimension` record:
   id, group, instructions, criteria, weight. Groups map to readers through `READER_GROUPS`:
-  `writing` + `substance` → human, `agent` → agent. `flag` dimensions are shared by all
+  `writing` + `substance` → human, `agent` → agent, `page` → page. `flag` dimensions are shared by all
   readers. `dimensions_for(readers)` picks the questions to send. Adding, removing or
   rewording a dimension should need no change outside this file.
 - **`evaluate.py`** builds one TypeSafe request per document: state is
@@ -60,10 +62,19 @@ Modules in `src/md_eval/`, driven by one data table:
   the module. `interpret()` is pure and turns answers into a `status` plus `reasons`.
   Vetoes never feed into totals. `decide()` takes an injected client, so it can be tested
   with a `MockTransport`.
+- **`hookutil.py`** holds what the hooks share: env thresholds, per-session state files in
+  the temp dir, the once-per-session missing-key notice, the weakest-dimensions feedback,
+  and `run_hook`, which always exits 0.
 - **`plan_hook.py`** (`md-eval-plan-hook`) is a Claude Code `PreToolUse` hook for
   `ExitPlanMode`. It scores `tool_input.plan` with the agent dimensions and denies once per
   session if the total is below `MD_EVAL_PLAN_MIN_SCORE` (default 0.6) or a flag is raised.
   It must fail open: any error allows the plan through.
+- **`artifact_hook.py`** (`md-eval-artifact-hook`) is a `PreToolUse` hook for the `Artifact`
+  tool. It checks only a publish of one `.html`/`.htm`/`.md` file, before any other work.
+  HTML is reduced to text with headings (`#`) and list items (`-`) kept. One request asks the
+  `page` dimensions, the flags and an extra `is_written_document` Noul, so apps and
+  dashboards are checked for flags only. It sends a file back at most once per session and
+  skips unchanged text (state keyed by a hash of the path). It must fail open too.
 
 ## Design rules to preserve
 
@@ -91,14 +102,15 @@ secret scanning.
 
 ## Claude Code plugins
 
-The repo root is a plugin marketplace (`.claude-plugin/marketplace.json`) with two plugins:
+The repo root is a plugin marketplace (`.claude-plugin/marketplace.json`) with three plugins:
 `plugins/md-eval` (the `eval-docs` and `decide-options` skills, which document how to run
 the CLI and read its JSON output) and `plugins/md-eval-plan-gate` (a `hooks.json` wiring `md-eval-plan-hook`
-to `ExitPlanMode`). Both run the CLI from GitHub via
+to `ExitPlanMode`) and `plugins/md-eval-artifact-gate` (wiring `md-eval-artifact-hook` to
+`Artifact`). Both run the CLI from GitHub via
 `uvx --from git+https://github.com/ash-singh/md-eval@vX.Y.Z`, pinned to a release tag, so
 pushes to `main` don't reach plugin users until the next release.
 
 - Update the skills in `plugins/md-eval/skills/` if CLI flags or JSON fields change.
 - Release with `scripts/release.sh X.Y.Z`, then `git push origin main vX.Y.Z`. It sets one
-  version in `pyproject.toml` and both `plugin.json` files, re-pins the uvx sources, validates
+  version in `pyproject.toml` and every `plugin.json` file, re-pins the uvx sources, validates
   the manifests, commits and tags. Don't edit versions or pins by hand.

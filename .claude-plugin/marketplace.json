@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "md-eval",
-  "description": "Score Markdown specs, RFCs and Claude Code plans with TypeSafe Jev.",
+  "description": "Score Markdown specs, RFCs, Claude Code plans, decisions and published pages with TypeSafe Jev.",
   "owner": {
     "name": "Ashwani Singh",
     "url": "https://github.com/ash-singh"
@@ -16,6 +16,11 @@
       "name": "md-eval-plan-gate",
       "description": "Hook that scores each plan before Claude leaves plan mode and sends weak plans back once with the gaps to fix.",
       "source": "./plugins/md-eval-plan-gate"
+    },
+    {
+      "name": "md-eval-artifact-gate",
+      "description": "Hook that checks each written page before Claude publishes it as an artifact, and sends back weak writing or pages with secrets, PII or unfinished content once.",
+      "source": "./plugins/md-eval-artifact-gate"
     }
   ]
 }

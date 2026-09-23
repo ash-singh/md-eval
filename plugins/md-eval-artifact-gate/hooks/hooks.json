@@ -1,0 +1,17 @@
+{
+  "description": "Check written pages with md-eval before the Artifact tool publishes them; send weak or risky pages back once per file per session",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Artifact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uvx --quiet --from git+https://github.com/ash-singh/md-eval@v0.2.0 md-eval-artifact-hook || true",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

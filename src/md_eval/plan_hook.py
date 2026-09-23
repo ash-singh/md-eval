@@ -11,55 +11,25 @@ plan that can't improve without user input never loops.
 """
 
 import asyncio
-import json
-import os
-import re
-import sys
-import tempfile
 from pathlib import Path
-
-from dotenv import find_dotenv, load_dotenv
 
 from .dimensions import DIMENSIONS, dimensions_for
 from .evaluate import evaluate_all
+from .hookutil import deny, env_float, flag_label, missing_key_notice, run_hook, session_file, weakest_lines
 
+HOOK = "plan-hook"
 READERS = ("agent",)
-WEAKEST = 3
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float(os.environ.get(name, default))
-    except ValueError:
-        return default
-
-
-def _session_file(session_id: str, suffix: str) -> Path:
-    safe = re.sub(r"[^A-Za-z0-9_-]", "", session_id) or "unknown"
-    return Path(tempfile.gettempdir()) / f"md-eval-plan-hook-{safe}.{suffix}"
 
 
 def _feedback(result, total: float, min_score: float, flag_threshold: float, min_conf: float) -> str:
-    dims = {d.id: d for d in DIMENSIONS}
     lines = [
         f"md-eval (TypeSafe Jev) scored this plan {total * 100:.0f}/100 for an AI coding agent "
         f"implementing it (threshold {min_score * 100:.0f}).",
+        *weakest_lines(result, min_conf, "a strong plan"),
     ]
-    weakest = sorted(result.scores.items(), key=lambda kv: kv[1].score)[:WEAKEST]
-    if weakest:
-        lines.append("Weakest dimensions:")
-    for dim_id, s in weakest:
-        d = dims[dim_id]
-        level = round(s.level)
-        line = f"- {d.label} ({s.score * 100:.0f}/100"
-        line += ", low confidence)" if s.confidence < min_conf else ")"
-        line += f": currently closest to \"{d.criteria[level]}\""
-        if level + 1 < len(d.criteria):
-            line += f"; a strong plan has \"{d.criteria[-1]}\""
-        lines.append(line)
     raised = result.raised_flags(flag_threshold)
     if raised:
-        lines.append("Raised flags: " + ", ".join(f"{dims[f].label} (P={result.flags[f]:.2f})" for f in raised))
+        lines.append("Raised flags: " + ", ".join(f"{flag_label(f)} (P={result.flags[f]:.2f})" for f in raised))
     lines.append(
         "Revise the plan to close these gaps where you can from facts you already know or can "
         "look up in the codebase (files, functions, commands, acceptance checks). Do not invent "
@@ -76,22 +46,17 @@ def run(payload: dict) -> dict | None:
         return None
 
     session_id = str(payload.get("session_id", ""))
-    load_dotenv(find_dotenv(usecwd=True))
-    if not os.environ.get("TYPESAFE_API_KEY"):
-        # Tell the user once per session, so a missing key isn't mistaken for a passing plan.
-        notice = _session_file(session_id, "nokey")
-        if notice.exists():
-            return None
-        notice.touch()
-        return {"systemMessage": "md-eval: TYPESAFE_API_KEY not set, plan not scored (get a key at https://console.typesafe.ai)"}
+    notice = missing_key_notice(HOOK, session_id, "plan")
+    if notice is not None:
+        return notice or None
 
-    max_blocks = int(_env_float("MD_EVAL_PLAN_MAX_BLOCKS", 1))
-    counter = _session_file(session_id, "count")
+    max_blocks = int(env_float("MD_EVAL_PLAN_MAX_BLOCKS", 1))
+    counter = session_file(HOOK, session_id, "count")
     blocks = int(counter.read_text()) if counter.exists() else 0
 
-    min_score = _env_float("MD_EVAL_PLAN_MIN_SCORE", 0.6)
-    flag_threshold = _env_float("MD_EVAL_PLAN_FLAG_THRESHOLD", 0.5)
-    min_conf = _env_float("MD_EVAL_PLAN_MIN_CONFIDENCE", 0.5)
+    min_score = env_float("MD_EVAL_PLAN_MIN_SCORE", 0.6)
+    flag_threshold = env_float("MD_EVAL_PLAN_FLAG_THRESHOLD", 0.5)
+    min_conf = env_float("MD_EVAL_PLAN_MIN_CONFIDENCE", 0.5)
 
     [result] = asyncio.run(
         evaluate_all([(Path("plan.md"), plan)], None, dimensions_for(READERS), 1, None)
@@ -108,25 +73,11 @@ def run(payload: dict) -> dict | None:
         return {"systemMessage": summary}
 
     counter.write_text(str(blocks + 1))
-    return {
-        "systemMessage": summary + " — sent back for revision",
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": _feedback(result, total, min_score, flag_threshold, min_conf),
-        },
-    }
+    return deny(summary + " — sent back for revision", _feedback(result, total, min_score, flag_threshold, min_conf))
 
 
 def main() -> None:
-    try:
-        output = run(json.load(sys.stdin))
-    except Exception as e:  # fail open: never block planning on a hook failure
-        print(f"md-eval plan hook skipped: {type(e).__name__}: {e}", file=sys.stderr)
-        sys.exit(0)
-    if output:
-        print(json.dumps(output))
-    sys.exit(0)
+    run_hook(run, "plan hook")
 
 
 if __name__ == "__main__":

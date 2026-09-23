@@ -6,6 +6,7 @@ DIMENSIONS. To add, remove or reword a dimension, edit this file only.
 Scores are graded judgments combined into a weighted total per reader:
   - human: writing + substance groups (a person reading and reviewing the doc)
   - agent: agent group (an AI coding agent implementing from the doc)
+  - page: page group (anyone reading a published page: a report, write-up or explainer)
 Flags are yes/no risk conditions shared by both readers and reported
 separately (they never average away into a total).
 """
@@ -13,12 +14,13 @@ separately (they never average away into a total).
 from dataclasses import dataclass
 from typing import Literal
 
-Group = Literal["writing", "substance", "agent", "flag"]
-Reader = Literal["human", "agent"]
+Group = Literal["writing", "substance", "agent", "page", "flag"]
+Reader = Literal["human", "agent", "page"]
 
 READER_GROUPS: dict[Reader, tuple[Group, ...]] = {
     "human": ("writing", "substance"),
     "agent": ("agent",),
+    "page": ("page",),
 }
 
 
@@ -317,6 +319,78 @@ DIMENSIONS: tuple[Dimension, ...] = (
             "Some needed context is missing or referenced without a link",
             "Nearly self-contained; one or two minor references are not linked",
             "Fully self-contained: all needed context is in the document or explicitly linked",
+        ),
+    ),
+    # ---- Published page (reports, write-ups, explainers) -------------------
+    # Not specific to technical docs. In `document.text`, headings are lines starting
+    # with '#' and list items lines starting with '-' (Markdown, or extracted from HTML).
+    Dimension(
+        id="page_point",
+        label="Main point",
+        short="Point",
+        group="page",
+        instructions=(
+            f"Within the first few lines of the page in {DOC}, can a reader tell what the page "
+            "is about and what it wants them to know, decide or do?"
+        ),
+        criteria=(
+            "No: even after reading the whole page, its purpose is unclear",
+            "Only after reading most of the page does its purpose become clear",
+            "The topic is clear early, but what the reader should take away is not",
+            "The topic and main takeaway are clear early, though stated indirectly",
+            "The opening states the topic and the main takeaway or ask directly",
+        ),
+    ),
+    Dimension(
+        id="page_clarity",
+        label="Clarity",
+        short="Clar",
+        group="page",
+        instructions=(
+            f"How easily could the readers the page in {DOC} is written for (the audience it "
+            "states or implies) understand it on a first read?"
+        ),
+        criteria=(
+            "Mostly incomprehensible to those readers: the main idea cannot be determined",
+            "Hard to follow: undefined terms or ambiguous sentences leave readers guessing",
+            "Understandable with effort: the main idea is clear but several passages need re-reading",
+            "Clear: nearly every passage is understood on first read, with occasional vague spots",
+            "Very clear: precise wording, terms explained where needed, understood on first read",
+        ),
+    ),
+    Dimension(
+        id="page_structure",
+        label="Structure",
+        short="Strc",
+        group="page",
+        instructions=(
+            f"How well organized is the page in {DOC} for its purpose? Consider headings, "
+            "whether the most important information comes first, logical order, and whether "
+            "related information is grouped together."
+        ),
+        criteria=(
+            "No discernible organization: one undifferentiated block or random ordering",
+            "Weak organization: some sections, but the order is confusing or topics are scattered",
+            "Adequate organization: sensible sections, but key information is buried or out of order",
+            "Well organized: clear sections in a logical order, with minor misplacements",
+            "Excellently organized: key information first, clear headings, easy to scan and navigate",
+        ),
+    ),
+    Dimension(
+        id="page_concision",
+        label="Concision",
+        short="Conc",
+        group="page",
+        instructions=(
+            f"How concise is the page in {DOC}? Penalize padding, repetition, filler phrases "
+            "and off-topic tangents. Do not penalize length that carries needed information."
+        ),
+        criteria=(
+            "Extremely bloated: most of the text is filler, repetition or tangents",
+            "Wordy: substantial repetition or tangents obscure the content",
+            "Somewhat wordy: noticeable padding or repetition in several places",
+            "Mostly concise: little padding, a few sentences could be cut",
+            "Tight: every sentence carries information, no repetition or filler",
         ),
     ),
     # ---- Risk / compliance flags (Noul) ------------------------------------

@@ -28,6 +28,7 @@ READERS: dict[str, tuple[Reader, ...]] = {
     "human": ("human",),
     "agent": ("agent",),
     "both": ("human", "agent"),
+    "page": ("page",),
 }
 
 err = Console(stderr=True)
@@ -46,7 +47,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         choices=READERS,
         default="agent",
         help="Who the document is evaluated for: 'human' (writing + substance), "
-        "'agent' (AI coding agent readiness), or 'both' (default: agent)",
+        "'agent' (AI coding agent readiness), 'both', or 'page' (readers of a published "
+        "report, write-up or explainer; not specific to technical docs) (default: agent)",
     )
     p.add_argument("--audience", help="Intended human readers, e.g. 'backend engineers on the payments team'")
     p.add_argument(
@@ -120,6 +122,9 @@ def print_summary(console: Console, results: list[DocResult], args, readers, wei
         columns.append(("Agent" if both else "Total", "bold", lambda r: fmt(r.total("agent", weights))))
         if not both:
             columns += [(d.short, None, _cell(d, args)) for d in dims if d.group == "agent"]
+    if "page" in readers:
+        columns.append(("Total", "bold", lambda r: fmt(r.total("page", weights))))
+        columns += [(d.short, None, _cell(d, args)) for d in dims if d.group == "page"]
 
     table.add_column("#", justify="right")
     table.add_column("Document", overflow="fold", max_width=28)
@@ -163,7 +168,7 @@ def print_details(console: Console, r: DocResult, readers) -> None:
     table.add_column("Score", justify="right")
     table.add_column("Conf.", justify="right")
     table.add_column("Most likely level", overflow="fold")
-    group_names = {"writing": "Human · writing", "substance": "Human · substance", "agent": "AI agent", "flag": "Flags"}
+    group_names = {"writing": "Human · writing", "substance": "Human · substance", "agent": "AI agent", "page": "Published page", "flag": "Flags"}
     prev = None
     for d in dimensions_for(readers):
         if d.group != prev:

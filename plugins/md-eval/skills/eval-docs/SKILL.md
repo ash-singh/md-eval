@@ -19,11 +19,14 @@ to install uv: https://docs.astral.sh/uv/getting-started/installation/
 md-eval <files-or-dirs> --json -                 # default: AI coding agent readiness
 md-eval <files-or-dirs> --reader both --json -   # also human writing/substance scores
 md-eval <files-or-dirs> --reader human --json -  # human readers only
+md-eval <files-or-dirs> --reader page --json -   # general writing: reports, write-ups, explainers
 ```
 
 - Directories are searched recursively; only Markdown files are read.
 - `--json -` prints JSON to stdout (the table goes to stderr). Parse stdout.
 - Use `--reader both` when the user cares about human reviewers too, not only agents.
+- Use `--reader page` for writing that isn't a technical spec, such as a report or write-up
+  (for HTML, score a Markdown draft of the text).
 - If it fails with a missing API key, tell the user to set `TYPESAFE_API_KEY` (e.g. in
   `~/.zshrc`; get a key at https://console.typesafe.ai). Do not look for or print the key yourself.
 - Exit code 1 means some document failed or was too long (`error` field is set).
@@ -32,7 +35,7 @@ md-eval <files-or-dirs> --reader human --json -  # human readers only
 
 One object per document:
 
-- `totals`: `{"agent": 0-1, "human": 0-1}` weighted totals for the chosen reader(s).
+- `totals`: `{"agent": 0-1, "human": 0-1, "page": 0-1}` weighted totals for the chosen reader(s).
 - `scores.<dimension>`: `score` (0-1), `confidence` (0-1), `probabilities` per level.
 - `flags.<flag>`: P(yes) for `unfinished_content`, `unsupported_claims`, `secrets`,
   `pii`, `contradictions`. `raised_flags` lists those at or above 0.5.
@@ -43,6 +46,7 @@ Agent dimensions: `agent_actionability`, `agent_explicitness`, `agent_grounding`
 `agent_interfaces`, `agent_verifiability`, `agent_boundaries`, `agent_self_contained`.
 Human dimensions: `clarity`, `structure`, `concision`, `audience_fit`,
 `problem_motivation`, `design_completeness`, `alternatives_tradeoffs`, `risks_rollout`.
+Page dimensions: `page_point`, `page_clarity`, `page_structure`, `page_concision`.
 
 ## Report
 
