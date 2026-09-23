@@ -16,6 +16,7 @@ uv run md-eval examples                        # evaluate a dir (recursive) or f
 uv run md-eval examples --reader both --details
 uv run md-eval examples --json -               # JSON on stdout, table on stderr
 uv run md-eval examples --dry-run              # print request + token estimates, no API call
+uv run md-eval decide examples/decisions/profile-cache.json   # score options for a decision
 uv run python scripts/screenshots.py           # regenerate README screenshots in docs/ (calls the API)
 scripts/release.sh 0.2.0                       # cut a release: versions, plugin pins, commit, tag
 ```
@@ -52,6 +53,13 @@ Modules in `src/md_eval/`, driven by one data table:
   - With `both`, documents rank by the mean of the human and agent totals.
   - Exit code: 0 = ok, 1 = some document errored or was skipped, 2 = no documents found or
     missing API key.
+- **`decide.py`** (`md-eval decide`, dispatched from `cli.main` before argument parsing)
+  scores a JSON decision in one request: a Score per option × criterion, a Noul per
+  option × constraint (veto), a Noul per option (vague), a Noul for "needs user input", and
+  one holistic Choice with a `none_fit` label. Question templates are data at the top of
+  the module. `interpret()` is pure and turns answers into a `status` plus `reasons`.
+  Vetoes never feed into totals. `decide()` takes an injected client, so it can be tested
+  with a `MockTransport`.
 - **`plan_hook.py`** (`md-eval-plan-hook`) is a Claude Code `PreToolUse` hook for
   `ExitPlanMode`. It scores `tool_input.plan` with the agent dimensions and denies once per
   session if the total is below `MD_EVAL_PLAN_MIN_SCORE` (default 0.6) or a flag is raised.
@@ -84,13 +92,13 @@ secret scanning.
 ## Claude Code plugins
 
 The repo root is a plugin marketplace (`.claude-plugin/marketplace.json`) with two plugins:
-`plugins/md-eval` (the `eval-docs` skill, which documents how to run the CLI and read its
-JSON output) and `plugins/md-eval-plan-gate` (a `hooks.json` wiring `md-eval-plan-hook`
+`plugins/md-eval` (the `eval-docs` and `decide-options` skills, which document how to run
+the CLI and read its JSON output) and `plugins/md-eval-plan-gate` (a `hooks.json` wiring `md-eval-plan-hook`
 to `ExitPlanMode`). Both run the CLI from GitHub via
 `uvx --from git+https://github.com/ash-singh/md-eval@vX.Y.Z`, pinned to a release tag, so
 pushes to `main` don't reach plugin users until the next release.
 
-- Update `plugins/md-eval/skills/eval-docs/SKILL.md` if CLI flags or JSON fields change.
+- Update the skills in `plugins/md-eval/skills/` if CLI flags or JSON fields change.
 - Release with `scripts/release.sh X.Y.Z`, then `git push origin main vX.Y.Z`. It sets one
   version in `pyproject.toml` and both `plugin.json` files, re-pins the uvx sources, validates
   the manifests, commits and tags. Don't edit versions or pins by hand.

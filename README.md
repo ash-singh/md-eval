@@ -71,12 +71,48 @@ Other options: `--flag-threshold` (default 0.5), `--min-confidence` (default 0.5
 `--concurrency` (default 4), `--model` (default `jev-latest`). The exit code is 1 if
 any document failed or was skipped.
 
+## Decide between options
+
+`md-eval decide` scores a decision instead of a document: 2 or more options against
+weighted criteria and hard constraints. One request asks Jev, in parallel:
+
+- a Score per option and criterion, combined into a weighted total in code
+- per option and constraint, P(the option violates it). Any violation rules the option out
+  and never averages away
+- per option, P(too vague to judge), and for the decision, P(it depends on something only
+  the user knows)
+- one holistic Choice over the options plus "none fit", as a cross-check
+
+Code turns that into a `status`: `proceed`, `ask_user` (close margin, uncertain scores that
+could flip the result, a disagreeing holistic pick, or user input needed), `clarify_options`
+or `no_viable_option`, with the `reasons`.
+
+```sh
+uv run md-eval decide examples/decisions/profile-cache.json
+uv run md-eval decide decision.json --json -      # full result as JSON on stdout
+uv run md-eval decide decision.json --dry-run     # show the request, no API call
+cat decision.json | uv run md-eval decide -       # read from stdin
+```
+
+The input format is in `examples/decisions/profile-cache.json` and `md-eval decide --help`.
+Thresholds are flags: `--veto-threshold`, `--vague-threshold`, `--ask-threshold`, `--margin`,
+`--min-confidence`.
+
+Jev weighs the facts it is given; it is not a reliable source of specialist knowledge. In a
+test on adding a column to a 50M-row PostgreSQL 15 table, it vetoed the correct plain
+`ADD COLUMN ... DEFAULT` (safe since PostgreSQL 11) and returned `ask_user`. With that fact
+stated in `context`, it picked it at 94/100 with `proceed`. Put the facts that settle a
+decision in `context`.
+
 ## Use with Claude Code
 
 This repo is also a Claude Code plugin marketplace with two plugins:
 
-- **`md-eval`**: the `eval-docs` skill. Ask Claude to "review this spec" or "is this
-  doc ready for an agent?" and it runs md-eval and reports the scores.
+- **`md-eval`**: two skills. `eval-docs`: ask Claude to "review this spec" or "is this
+  doc ready for an agent?" and it runs md-eval and reports the scores. `decide-options`:
+  Claude can get an independent second opinion from `md-eval decide` when it faces a
+  consequential choice. It decides when that is worth it, or you can ask ("compare these
+  approaches with md-eval decide").
 - **`md-eval-plan-gate`** (optional): a hook that scores every plan before Claude leaves
   plan mode. A plan scoring below 60/100 for agent readiness, or raising a flag, is sent
   back once with its weakest dimensions so Claude can fill the gaps. For example, a
@@ -150,7 +186,7 @@ git push origin main v0.2.0
 
 The script sets one version in `pyproject.toml` and both `plugin.json` files, re-pins the
 plugins' `uvx` sources to the new tag, runs `claude plugin validate`, then commits and
-tags. Update `plugins/md-eval/skills/eval-docs/SKILL.md` first if CLI flags or JSON
+tags. Update the skills in `plugins/md-eval/skills/` first if CLI flags or JSON
 fields changed.
 
 ## Customizing
