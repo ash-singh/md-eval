@@ -9,7 +9,7 @@ description: Evaluate Markdown specs, RFCs, task docs and design docs for AI cod
 Source: https://github.com/ash-singh/md-eval (dimensions are defined in `src/md_eval/dimensions.py`).
 
 If `md-eval` is on PATH, use it. Otherwise run it through uv without installing:
-`uvx --quiet --from git+https://github.com/ash-singh/md-eval@31ae6aa84567d14aec4484e002d68f18cfdb2ddc md-eval ...`
+`uvx --quiet --from git+https://github.com/ash-singh/md-eval@867af23641095f5cc869d9fae0783b31d0f9baa5 md-eval ...`
 (the first run takes a few seconds to build). If `uvx` is missing too, tell the user
 to install uv: https://docs.astral.sh/uv/getting-started/installation/
 
