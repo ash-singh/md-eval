@@ -29,7 +29,7 @@ uv run python scripts/screenshots.py           # regenerate README screenshots i
 
 ## Architecture
 
-Three modules in `src/md_eval/`, driven by one data table:
+Modules in `src/md_eval/`, driven by one data table:
 
 - **`dimensions.py` is the single source of truth.** Every judgment is a `Dimension` record:
   id, group, instructions, criteria, weight. Groups map to readers through `READER_GROUPS`:
@@ -51,6 +51,10 @@ Three modules in `src/md_eval/`, driven by one data table:
   - With `both`, documents rank by the mean of the human and agent totals.
   - Exit code: 0 = ok, 1 = some document errored or was skipped, 2 = no documents found or
     missing API key.
+- **`plan_hook.py`** (`md-eval-plan-hook`) is a Claude Code `PreToolUse` hook for
+  `ExitPlanMode`. It scores `tool_input.plan` with the agent dimensions and denies once per
+  session if the total is below `MD_EVAL_PLAN_MIN_SCORE` (default 0.6) or a flag is raised.
+  It must fail open: any error allows the plan through.
 
 ## Design rules to preserve
 
