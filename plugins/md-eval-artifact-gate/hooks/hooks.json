@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --quiet --from git+https://github.com/ash-singh/md-eval@v0.3.0 md-eval-artifact-hook || true",
+            "command": "uvx --quiet --from git+https://github.com/ash-singh/md-eval@v0.4.0 md-eval-artifact-hook || true",
             "timeout": 120
           }
         ]
