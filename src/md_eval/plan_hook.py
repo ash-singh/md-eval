@@ -4,7 +4,8 @@ Reads the hook payload on stdin, evaluates `tool_input.plan` for an AI coding
 agent reader, and denies ExitPlanMode with concrete gaps when the plan scores
 below the threshold or raises a flag. Claude sees the reason and revises.
 
-Fails open: any error (no API key, network, oversized plan) lets the plan through.
+Fails open: any error (network, oversized plan) lets the plan through. A missing
+API key also lets it through, with a notice to the user once per session.
 Each session is sent back at most MD_EVAL_PLAN_MAX_BLOCKS times (default 1), so a
 plan that can't improve without user input never loops.
 """
@@ -33,9 +34,9 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-def _counter(session_id: str) -> Path:
+def _session_file(session_id: str, suffix: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9_-]", "", session_id) or "unknown"
-    return Path(tempfile.gettempdir()) / f"md-eval-plan-hook-{safe}.count"
+    return Path(tempfile.gettempdir()) / f"md-eval-plan-hook-{safe}.{suffix}"
 
 
 def _feedback(result, total: float, min_score: float, flag_threshold: float, min_conf: float) -> str:
@@ -74,15 +75,24 @@ def run(payload: dict) -> dict | None:
     if not plan.strip():
         return None
 
+    session_id = str(payload.get("session_id", ""))
+    load_dotenv(find_dotenv(usecwd=True))
+    if not os.environ.get("TYPESAFE_API_KEY"):
+        # Tell the user once per session, so a missing key isn't mistaken for a passing plan.
+        notice = _session_file(session_id, "nokey")
+        if notice.exists():
+            return None
+        notice.touch()
+        return {"systemMessage": "md-eval: TYPESAFE_API_KEY not set, plan not scored (get a key at https://console.typesafe.ai)"}
+
     max_blocks = int(_env_float("MD_EVAL_PLAN_MAX_BLOCKS", 1))
-    counter = _counter(str(payload.get("session_id", "")))
+    counter = _session_file(session_id, "count")
     blocks = int(counter.read_text()) if counter.exists() else 0
 
     min_score = _env_float("MD_EVAL_PLAN_MIN_SCORE", 0.6)
     flag_threshold = _env_float("MD_EVAL_PLAN_FLAG_THRESHOLD", 0.5)
     min_conf = _env_float("MD_EVAL_PLAN_MIN_CONFIDENCE", 0.5)
 
-    load_dotenv(find_dotenv(usecwd=True))
     [result] = asyncio.run(
         evaluate_all([(Path("plan.md"), plan)], None, dimensions_for(READERS), 1, None)
     )

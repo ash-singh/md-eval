@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "md-eval",
+  "description": "Score Markdown specs, RFCs and Claude Code plans with TypeSafe Jev.",
+  "owner": {
+    "name": "Ashwani Singh",
+    "url": "https://github.com/ash-singh"
+  },
+  "plugins": [
+    {
+      "name": "md-eval",
+      "description": "eval-docs skill: score Markdown docs for AI coding agent readiness and human readability with the md-eval CLI.",
+      "source": "./plugins/md-eval"
+    },
+    {
+      "name": "md-eval-plan-gate",
+      "description": "Hook that scores each plan before Claude leaves plan mode and sends weak plans back once with the gaps to fix.",
+      "source": "./plugins/md-eval-plan-gate"
+    }
+  ]
+}

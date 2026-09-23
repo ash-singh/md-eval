@@ -51,6 +51,41 @@ Other options: `--flag-threshold` (default 0.5), `--min-confidence` (default 0.5
 `--concurrency` (default 4), `--model` (default `jev-latest`). The exit code is 1 if
 any document failed or was skipped.
 
+## Use with Claude Code
+
+This repo is also a Claude Code plugin marketplace with two plugins:
+
+- **`md-eval`**: the `eval-docs` skill. Ask Claude to "review this spec" or "is this
+  doc ready for an agent?" and it runs md-eval and reports the scores.
+- **`md-eval-plan-gate`** (optional): a hook that scores every plan before Claude leaves
+  plan mode. A plan scoring below 60/100 for agent readiness, or raising a flag, is sent
+  back once with its weakest dimensions so Claude can fill the gaps. For example, a
+  one-line "add caching" plan scored 23 and was sent back, and a plan with files, steps
+  and test commands scored 89 and went straight through.
+
+Setup needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and a TypeSafe
+key. Neither plugin needs a separate install; they run md-eval from GitHub through `uvx`.
+
+```sh
+claude plugin marketplace add ash-singh/md-eval
+claude plugin install md-eval@md-eval
+claude plugin install md-eval-plan-gate@md-eval          # optional
+echo 'export TYPESAFE_API_KEY=...' >> ~/.zshrc           # from https://console.typesafe.ai
+```
+
+Restart Claude Code afterwards so it picks up the key. The plan gate lets plans through
+if anything goes wrong (network, oversized plan). Without a key it says so once per
+session. Tune it with environment variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MD_EVAL_PLAN_MIN_SCORE` | `0.6` | Send back plans whose agent total is below this (0-1) |
+| `MD_EVAL_PLAN_FLAG_THRESHOLD` | `0.5` | Send back plans with a flag at or above this P(yes) |
+| `MD_EVAL_PLAN_MAX_BLOCKS` | `1` | Times a plan can be sent back per session |
+| `MD_EVAL_PLAN_MIN_CONFIDENCE` | `0.5` | Mark scores below this confidence as low confidence |
+
+To turn the gate off, run `claude plugin disable md-eval-plan-gate@md-eval`.
+
 ## Customizing
 
 All dimensions are defined as data in `src/md_eval/dimensions.py`. Edit

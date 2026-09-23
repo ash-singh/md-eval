@@ -80,5 +80,14 @@ files, because the model would read them and it could bias the flags. The discla
 belongs in the README, and `.github/secret_scanning.yml` excludes `examples/` from GitHub
 secret scanning.
 
-A companion Claude Code skill at `~/.claude/skills/eval-docs/SKILL.md` documents how to run
-the CLI and read its JSON output. Update it if CLI flags or JSON fields change.
+## Claude Code plugins
+
+The repo root is a plugin marketplace (`.claude-plugin/marketplace.json`) with two plugins:
+`plugins/md-eval` (the `eval-docs` skill, which documents how to run the CLI and read its
+JSON output) and `plugins/md-eval-plan-gate` (a `hooks.json` wiring `md-eval-plan-hook`
+to `ExitPlanMode`). Both run the CLI from GitHub via `uvx --from git+https://github.com/ash-singh/md-eval`,
+so plugin users get whatever is on `main`.
+
+- Update `plugins/md-eval/skills/eval-docs/SKILL.md` if CLI flags or JSON fields change.
+- Bump `version` in a plugin's `plugin.json` when its files change, so installs update.
+- Check manifests with `claude plugin validate .` (and on each plugin directory).

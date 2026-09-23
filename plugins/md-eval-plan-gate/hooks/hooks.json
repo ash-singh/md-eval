@@ -1,0 +1,17 @@
+{
+  "description": "Score plans with md-eval before ExitPlanMode; send weak plans back once per session",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uvx --quiet --from git+https://github.com/ash-singh/md-eval md-eval-plan-hook || true",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

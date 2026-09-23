@@ -1,0 +1,11 @@
+{
+  "name": "md-eval-plan-gate",
+  "version": "0.1.0",
+  "description": "Scores each plan with md-eval before Claude leaves plan mode and sends weak plans back once with the gaps to fix.",
+  "author": {
+    "name": "Ashwani Singh",
+    "url": "https://github.com/ash-singh"
+  },
+  "homepage": "https://github.com/ash-singh/md-eval",
+  "repository": "https://github.com/ash-singh/md-eval"
+}
