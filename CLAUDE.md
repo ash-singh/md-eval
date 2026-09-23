@@ -81,11 +81,13 @@ Modules in `src/md_eval/`, driven by one data table:
   never raise and never use stdout. `md-eval stats` summarizes it. `api_ms` excludes uvx
   startup.
 - **`hookutil.py`** holds what the hooks share: env thresholds, per-session state files in
-  the temp dir, the once-per-session missing-key notice, the weakest-dimensions feedback,
-  and `run_hook`, which always exits 0.
+  the temp dir, the once-per-session missing-key and failed-check notices (a failed check
+  is logged with outcome `error` and a reason code such as `firewall_blocked`), the
+  weakest-dimensions feedback, and `run_hook`, which always exits 0.
 - **`plan_hook.py`** (`md-eval-plan-hook`) is a Claude Code `PreToolUse` hook for
-  `ExitPlanMode`. It scores `tool_input.plan` with the agent dimensions and denies once per
-  session if the total is below `MD_EVAL_PLAN_MIN_SCORE` (default 0.6) or a flag is raised.
+  `ExitPlanMode`. It scores the plan file at `tool_input.planFilePath` (falling back to
+  `tool_input.plan`, which Claude Code can leave stale after a revision) with the agent
+  dimensions and denies once per session if the total is below `MD_EVAL_PLAN_MIN_SCORE` (default 0.6) or a flag is raised.
   It must fail open: any error allows the plan through.
 - **`artifact_hook.py`** (`md-eval-artifact-hook`) is a `PreToolUse` hook for the `Artifact`
   tool. It checks only a publish of one `.html`/`.htm`/`.md` file, before any other work.

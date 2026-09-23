@@ -5,6 +5,7 @@ import pytest
 
 from md_eval import artifact_hook, plan_hook
 from md_eval.artifact_hook import extract_text, target_file
+from md_eval.hookutil import error_code
 
 THIN_PLAN = "# Plan\n\nAdd caching to the API so it is faster."
 PROSE = " ".join(["This sentence carries a point about checkout latency and what we changed."] * 25)
@@ -53,6 +54,20 @@ def test_plan_flag_sends_back_despite_high_score(api):
     api.noul = lambda qid, q: 0.9 if qid == "secrets" else 0.05
     out = plan_hook.run(payload({"plan": THIN_PLAN}))
     assert denied(out) and "Secrets" in out["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+def test_plan_file_wins_over_stale_tool_input(api, tmp_path):
+    plan_file = tmp_path / "plan.md"
+    plan_file.write_text("# Plan\n\nRevised plan from the file.")
+    plan_hook.run(payload({"plan": THIN_PLAN, "planFilePath": str(plan_file)}))
+    [body] = api.requests
+    assert "Revised plan from the file." in json.dumps(body) and "Add caching" not in json.dumps(body)
+
+
+def test_plan_missing_file_falls_back_to_tool_input(api, tmp_path):
+    plan_hook.run(payload({"plan": THIN_PLAN, "planFilePath": str(tmp_path / "gone.md")}))
+    [body] = api.requests
+    assert "Add caching" in json.dumps(body)
 
 
 def test_plan_empty_is_silent(api):
@@ -201,17 +216,33 @@ def test_malformed_stdin_exits_0_silently(module, monkeypatch, capsys):
     assert run_main(module, "not json", monkeypatch, capsys) == ""
 
 
-def test_api_failure_lets_plan_through(api, monkeypatch, capsys, log_events):
+def test_api_failure_lets_plan_through_with_one_notice(api, monkeypatch, capsys, log_events):
     api.status = 500
     out = run_main(plan_hook, json.dumps(payload({"plan": THIN_PLAN})), monkeypatch, capsys)
-    assert out == ""
-    assert log_events() == []
+    notice = json.loads(out)
+    assert "hookSpecificOutput" not in notice and "plan not scored" in notice["systemMessage"]
+    assert plan_hook.run(payload({"plan": THIN_PLAN})) is None  # notice shown once per session
+    assert [(e["outcome"], e["reason_codes"]) for e in log_events()] == [("error", ["TypeSafeInternalServerError"])] * 2
+    assert THIN_PLAN not in json.dumps(log_events())
 
 
-def test_api_failure_lets_page_through(page, api, monkeypatch, capsys):
+def test_api_failure_lets_page_through_with_notice(page, api, monkeypatch, capsys, log_events):
     api.status = 500
     out = run_main(artifact_hook, json.dumps(payload({"file_path": str(page)})), monkeypatch, capsys)
-    assert out == ""
+    notice = json.loads(out)
+    assert "hookSpecificOutput" not in notice and "page not scored" in notice["systemMessage"]
+    [event] = log_events()
+    assert event["outcome"] == "error"
+
+
+@pytest.mark.parametrize("error, code", [
+    ("TypeSafePermissionDeniedError: POST https://api.typesafe.ai: 403 <title>Attention Required! | Cloudflare</title>",
+     "firewall_blocked"),
+    ("too long (~40,000 tokens > 28,000); not evaluated", "too_long"),
+    ("TypeSafeAPIConnectionError: connection refused", "TypeSafeAPIConnectionError"),
+])
+def test_error_codes(error, code):
+    assert error_code(error) == code
 
 
 def test_hook_stdout_is_one_json_object(api, monkeypatch, capsys):

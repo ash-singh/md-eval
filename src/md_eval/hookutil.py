@@ -82,6 +82,42 @@ def log_check(hook: str, session_id: str, subject: str, text: str, result: DocRe
     )
 
 
+ERROR_HINTS = {
+    "too_long": "too long to score",
+    "firewall_blocked": "the TypeSafe API's firewall rejected the request; text that looks like "
+    "shell commands or file paths such as /etc/passwd can trigger it",
+}
+
+
+def error_code(error: str) -> str:
+    """A short label for a failed check, logged instead of the error message."""
+    if error.startswith("too long"):
+        return "too_long"
+    if "403" in error and "cloudflare" in error.lower():
+        return "firewall_blocked"
+    return error.split(":", 1)[0].strip() or "error"
+
+
+def check_failed(hook: str, session_id: str, subject: str, text: str, error: str, api_ms: int, what: str) -> dict | None:
+    """Log a check that could not score, and tell the user once per session. The gate
+    still fails open; this keeps a skipped check from passing for a clean one."""
+    code = error_code(error)
+    log_event(
+        hook,
+        session=short_hash(session_id),
+        subject=short_hash(subject),
+        text=short_hash(text),
+        outcome="error",
+        reason_codes=[code],
+        api_ms=api_ms,
+    )
+    marker = session_file(hook, session_id, "error")
+    if marker.exists():
+        return None
+    marker.touch()
+    return {"systemMessage": f"md-eval: {what} not scored ({ERROR_HINTS.get(code, code)}); allowed without a check"}
+
+
 def deny(summary: str, reason: str) -> dict:
     return {
         "systemMessage": summary,

@@ -1,6 +1,7 @@
 """Claude Code PreToolUse hook: score a plan with md-eval before ExitPlanMode.
 
-Reads the hook payload on stdin, evaluates `tool_input.plan` for an AI coding
+Reads the hook payload on stdin, evaluates the plan (the file at
+`tool_input.planFilePath`, else `tool_input.plan`) for an AI coding
 agent reader, and denies ExitPlanMode with concrete gaps when the plan scores
 below the threshold or raises a flag. Claude sees the reason and revises.
 
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from .dimensions import DIMENSIONS, dimensions_for
 from .evaluate import evaluate_all
-from .hookutil import deny, env_float, flag_label, log_check, missing_key_notice, run_hook, session_file, weakest_lines
+from .hookutil import check_failed, deny, env_float, flag_label, log_check, missing_key_notice, run_hook, session_file, weakest_lines
 from .log import Timer
 
 HOOK = "plan-hook"
@@ -40,9 +41,24 @@ def _feedback(result, total: float, min_score: float, flag_threshold: float, min
     return "\n".join(lines)
 
 
+def plan_text(tool_input: dict) -> str:
+    """The plan as Claude Code will show it for approval.
+
+    Prefer the plan file: after a revision, Claude Code can still send the first
+    draft in `tool_input.plan` while `planFilePath` holds the current text.
+    """
+    path = tool_input.get("planFilePath")
+    if path:
+        try:
+            return Path(path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            pass
+    return tool_input.get("plan") or ""
+
+
 def run(payload: dict) -> dict | None:
     """Return hook JSON output, or None to allow silently."""
-    plan = (payload.get("tool_input") or {}).get("plan") or ""
+    plan = plan_text(payload.get("tool_input") or {})
     if not plan.strip():
         return None
 
@@ -64,7 +80,7 @@ def run(payload: dict) -> dict | None:
             evaluate_all([(Path("plan.md"), plan)], None, dimensions_for(READERS), 1, None)
         )
     if not result.ok:
-        return None
+        return check_failed(HOOK, session_id, "plan", plan, result.error, timer.ms, "plan")
 
     weights = {d.id: d.weight for d in DIMENSIONS if not d.is_flag}
     total = result.total("agent", weights)

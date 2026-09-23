@@ -21,11 +21,11 @@ import os
 from html.parser import HTMLParser
 from pathlib import Path
 
-from typesafe_sdk import AsyncTypeSafeClient, Noul
+from typesafe_sdk import AsyncTypeSafeClient, Noul, TypeSafeError
 
 from .dimensions import DIMENSIONS, dimensions_for
 from .evaluate import MAX_STATE_TOKENS, DocResult, build_questions, build_state, fill_result, request_tokens
-from .hookutil import deny, env_float, flag_label, log_check, missing_key_notice, run_hook, session_file, weakest_lines
+from .hookutil import check_failed, deny, env_float, flag_label, log_check, missing_key_notice, run_hook, session_file, weakest_lines
 from .log import Timer
 
 HOOK = "artifact-hook"
@@ -161,7 +161,11 @@ async def _score(path: Path, text: str) -> tuple[DocResult, float]:
         return result, 0.0
     questions = {**build_questions(dims), IS_DOCUMENT: IS_DOCUMENT_QUESTION}
     async with AsyncTypeSafeClient() as client:
-        response = await client.system_one(state, questions)
+        try:
+            response = await client.system_one(state, questions)
+        except TypeSafeError as e:
+            result.error = f"{type(e).__name__}: {e}"
+            return result, 0.0
     fill_result(result, dims, response)
     return result, response.answers[IS_DOCUMENT].noul
 
@@ -193,7 +197,7 @@ def run(payload: dict) -> dict | None:
     with Timer() as timer:
         result, p_doc = asyncio.run(_score(path, text))
     if not result.ok:
-        return None
+        return check_failed(HOOK, session_id, str(path.resolve()), text, result.error, timer.ms, "page")
 
     min_score = env_float("MD_EVAL_ARTIFACT_MIN_SCORE", 0.6)
     flag_threshold = env_float("MD_EVAL_ARTIFACT_FLAG_THRESHOLD", 0.5)
