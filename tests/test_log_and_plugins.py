@@ -4,6 +4,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from md_eval.cli import main
 from md_eval.log import log_event, log_path, summarize
 
@@ -66,6 +68,30 @@ def test_stats_subcommand(capsys, log_events):
 def test_stats_without_log(capsys):
     assert main(["stats"]) == 0
     assert "No log" in capsys.readouterr().out
+
+
+def test_stats_json(capsys, log_events):
+    log_event("plan-hook", session="a", subject="p", total=0.2, outcome="sent_back", api_ms=900)
+    log_event("plan-hook", session="a", subject="p", total=0.7, outcome="allowed_after_limit", api_ms=1100)
+    log_event("decide", status="proceed", reason_codes=["veto"], api_ms=10)
+    assert main(["stats", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)  # stdout is only the JSON object
+    assert data["events"] == 3
+    plan = data["tools"]["plan-hook"]
+    assert plan["runs"] == 2 and plan["outcomes"] == {"sent_back": 1, "allowed_after_limit": 1}
+    assert plan["api_ms"] == {"median": 1000, "p90": 1100}
+    assert plan["revisions"]["count"] == 1 and plan["revisions"]["improved"] == 1
+    assert round(plan["revisions"]["mean_change"], 3) == 0.5
+    decide = data["tools"]["decide"]
+    assert decide["codes"] == {"veto": 1} and decide["mean_total"] is None and decide["revisions"] is None
+
+
+@pytest.mark.parametrize("log", ["missing", "off"])
+def test_stats_json_without_log(log, capsys, monkeypatch, tmp_path):
+    if log == "off":
+        monkeypatch.setenv("MD_EVAL_LOG", "off")
+    assert main(["stats", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"events": 0, "tools": {}}
 
 
 # ---- plugin manifests ------------------------------------------------------------------

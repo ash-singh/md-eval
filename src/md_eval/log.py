@@ -83,29 +83,23 @@ def read_events(path: Path) -> list[dict]:
     return events
 
 
-def summarize(events: list[dict]) -> str:
-    """Plain-text summary: counts, outcomes, timings, and before/after scores for revisions."""
+def summary_data(events: list[dict]) -> dict:
+    """Counts, outcomes, timings, and before/after scores for revisions, per tool.
+
+    Totals stay 0-1; `None` means the tool logged nothing to compute that from.
+    """
     if not events:
-        return "No events logged yet."
-    lines = [f"{len(events)} events, {events[0]['ts']} to {events[-1]['ts']}"]
+        return {"events": 0, "tools": {}}
     by_tool: dict[str, list[dict]] = defaultdict(list)
     for e in events:
         by_tool[e.get("tool", "?")].append(e)
 
+    tools = {}
     for tool, evs in sorted(by_tool.items()):
-        lines.append(f"\n{tool}: {len(evs)} runs")
         outcomes = Counter(e.get("outcome") or e.get("status") for e in evs)
-        lines.append("  outcomes: " + ", ".join(f"{k} {v}" for k, v in outcomes.most_common()))
         ms = sorted(e["api_ms"] for e in evs if isinstance(e.get("api_ms"), int))
-        if ms:
-            p90 = ms[min(len(ms) - 1, int(len(ms) * 0.9))]
-            lines.append(f"  API time: median {statistics.median(ms):.0f} ms, p90 {p90} ms")
         scores = [e["total"] for e in evs if isinstance(e.get("total"), (int, float))]
-        if scores:
-            lines.append(f"  mean total: {statistics.mean(scores) * 100:.0f}/100")
         codes = Counter(c for e in evs for c in e.get("reason_codes", []) + e.get("flags", []))
-        if codes:
-            lines.append("  reasons/flags: " + ", ".join(f"{k} {v}" for k, v in codes.most_common()))
 
         # Revisions: a sent-back plan or page followed by a new score for the same subject.
         pairs = []
@@ -116,10 +110,43 @@ def summarize(events: list[dict]) -> str:
                 pairs.append((last_blocked.pop(key), e["total"]))
             if e.get("outcome") == "sent_back" and isinstance(e.get("total"), (int, float)):
                 last_blocked[key] = e["total"]
-        if pairs:
-            better = sum(after > before for before, after in pairs)
-            gain = statistics.mean(after - before for before, after in pairs) * 100
-            lines.append(f"  revisions: {len(pairs)} scored again, {better} improved, mean change {gain:+.0f} points")
+
+        tools[tool] = {
+            "runs": len(evs),
+            "outcomes": dict(outcomes.most_common()),
+            "api_ms": {"median": statistics.median(ms), "p90": ms[min(len(ms) - 1, int(len(ms) * 0.9))]} if ms else None,
+            "mean_total": statistics.mean(scores) if scores else None,
+            "codes": dict(codes.most_common()),
+            "revisions": {
+                "count": len(pairs),
+                "improved": sum(after > before for before, after in pairs),
+                "mean_change": statistics.mean(after - before for before, after in pairs),
+            } if pairs else None,
+        }
+    return {"events": len(events), "first_ts": events[0]["ts"], "last_ts": events[-1]["ts"], "tools": tools}
+
+
+def summarize(events: list[dict]) -> str:
+    """Plain-text rendering of `summary_data`."""
+    data = summary_data(events)
+    if not data["events"]:
+        return "No events logged yet."
+    lines = [f"{data['events']} events, {data['first_ts']} to {data['last_ts']}"]
+    for tool, t in data["tools"].items():
+        lines.append(f"\n{tool}: {t['runs']} runs")
+        lines.append("  outcomes: " + ", ".join(f"{k} {v}" for k, v in t["outcomes"].items()))
+        if t["api_ms"]:
+            lines.append(f"  API time: median {t['api_ms']['median']:.0f} ms, p90 {t['api_ms']['p90']} ms")
+        if t["mean_total"] is not None:
+            lines.append(f"  mean total: {t['mean_total'] * 100:.0f}/100")
+        if t["codes"]:
+            lines.append("  reasons/flags: " + ", ".join(f"{k} {v}" for k, v in t["codes"].items()))
+        r = t["revisions"]
+        if r:
+            lines.append(
+                f"  revisions: {r['count']} scored again, {r['improved']} improved, "
+                f"mean change {r['mean_change'] * 100:+.0f} points"
+            )
     return "\n".join(lines)
 
 
@@ -128,8 +155,13 @@ def main(argv: list[str]) -> int:
 
     p = argparse.ArgumentParser(prog="md-eval stats", description="Summarize the local md-eval decision log.")
     p.add_argument("--path", type=Path, help="Log file (default: $MD_EVAL_LOG or ~/.cache/md-eval/decisions.jsonl)")
+    p.add_argument("--json", action="store_true", help="Print the summary as one JSON object on stdout")
     args = p.parse_args(argv)
     path = args.path or log_path()
+    if args.json:
+        events = read_events(path) if path is not None and path.exists() else []
+        print(json.dumps(summary_data(events), indent=2))
+        return 0
     if path is None:
         print("Logging is off (MD_EVAL_LOG=off).")
         return 0

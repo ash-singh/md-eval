@@ -20,6 +20,7 @@ uv run md-eval examples --json -               # JSON on stdout, table on stderr
 uv run md-eval examples --dry-run              # print request + token estimates, no API call
 uv run md-eval decide examples/decisions/profile-cache.json   # score options for a decision
 uv run md-eval stats                           # summarize the local decision log
+uv run md-eval stats --json                    # same summary as one JSON object (totals 0-1)
 uv run pytest                                  # offline tests (mock API; no key or network)
 uv run python scripts/eval_decide.py           # decide vs known answers in evals/decide/ (calls the API)
 uv run python scripts/screenshots.py           # regenerate README screenshots in docs/ (calls the API)

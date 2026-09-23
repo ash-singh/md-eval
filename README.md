@@ -213,6 +213,7 @@ never contains your plans, pages or decisions. It is never sent anywhere. Summar
 
 ```sh
 md-eval stats          # or: uvx --from git+https://github.com/ash-singh/md-eval md-eval stats
+md-eval stats --json   # the same summary as one JSON object, for scripts
 ```
 
 The summary shows, per tool, how often each outcome happened, median and p90 API time, the
