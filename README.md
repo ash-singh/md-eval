@@ -25,10 +25,30 @@ With `--reader both`, the same docs ranked for human reviewers and AI agents sid
 
 ## Setup
 
+You need [uv](https://docs.astral.sh/uv/getting-started/installation/) and a TypeSafe API
+key from https://console.typesafe.ai. Pick one way to install:
+
+**Claude Code plugins**: see [Use with Claude Code](#use-with-claude-code). Nothing else to
+install.
+
+**Standalone CLI**: installs the `md-eval` command from a release:
+
 ```sh
-uv sync
-cp .env.example .env   # then add your key from https://console.typesafe.ai
+uv tool install git+https://github.com/ash-singh/md-eval@v0.1.0
+export TYPESAFE_API_KEY=...   # add to ~/.zshrc to keep it
+md-eval examples/
 ```
+
+**From source**: for development. Use `uv run md-eval` from the repo:
+
+```sh
+git clone https://github.com/ash-singh/md-eval && cd md-eval
+uv sync
+cp .env.example .env   # then add your key
+```
+
+The key is read from the environment, or from a `.env` file found by searching upward
+from the current directory. `--dry-run` works without a key.
 
 ## Usage
 
@@ -40,7 +60,7 @@ uv run md-eval specs/ --reader both --details    # human and agent scores side b
 uv run md-eval docs/ --audience "SREs new to the payments stack"
 uv run md-eval docs/ --weight design_completeness=3 --weight agent_verifiability=2
 uv run md-eval docs/ --json results.json        # raw scores, confidences, level probabilities
-uv run md-eval docs/ --json - | jq '.[].total'  # JSON on stdout, table on stderr
+uv run md-eval docs/ --json - | jq '.[].totals' # JSON on stdout, table on stderr
 uv run md-eval docs/ --dry-run                  # show the request + token estimates, no API call
 ```
 
@@ -64,7 +84,8 @@ This repo is also a Claude Code plugin marketplace with two plugins:
   and test commands scored 89 and went straight through.
 
 Setup needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and a TypeSafe
-key. Neither plugin needs a separate install; they run md-eval from GitHub through `uvx`.
+key. Neither plugin needs a separate install. They run md-eval through `uvx`, pinned to
+the release tag that matches the plugin version.
 
 ```sh
 claude plugin marketplace add ash-singh/md-eval
@@ -73,9 +94,30 @@ claude plugin install md-eval-plan-gate@md-eval          # optional
 echo 'export TYPESAFE_API_KEY=...' >> ~/.zshrc           # from https://console.typesafe.ai
 ```
 
-Restart Claude Code afterwards so it picks up the key. The plan gate lets plans through
-if anything goes wrong (network, oversized plan). Without a key it says so once per
-session. Tune it with environment variables:
+You can also install from inside a session with `/plugin marketplace add ash-singh/md-eval`
+and `/plugin install md-eval@md-eval`. Restart Claude Code afterwards so it picks up
+the key.
+
+### Using it
+
+The skill triggers on requests like these:
+
+- "Is `docs/rfc-042.md` ready for an agent to implement?"
+- "Score every spec in `specs/` for human reviewers and agents."
+- "Improve this task doc until it scores 80+ for an agent."
+
+Claude runs md-eval, reports the total, the weakest dimensions and any raised flags, and
+when asked, edits the doc and re-runs it to show before and after scores.
+
+The plan gate needs no prompting. Use plan mode as usual. When a plan is sent back, you
+see `md-eval: plan scored N/100 for agent readiness — sent back for revision` and Claude
+revises it. It asks you when a gap needs your input.
+
+### Plan gate settings
+
+The plan gate lets plans through
+if anything goes wrong (network, oversized plan). The plan gate lets plans through if anything goes wrong (network, oversized plan).
+Without a key it says so once per session. Tune it with environment variables:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -84,7 +126,32 @@ session. Tune it with environment variables:
 | `MD_EVAL_PLAN_MAX_BLOCKS` | `1` | Times a plan can be sent back per session |
 | `MD_EVAL_PLAN_MIN_CONFIDENCE` | `0.5` | Mark scores below this confidence as low confidence |
 
-To turn the gate off, run `claude plugin disable md-eval-plan-gate@md-eval`.
+### Update, disable, remove
+
+```sh
+claude plugin marketplace update md-eval                 # fetch the latest release list
+claude plugin update md-eval@md-eval                     # then restart Claude Code
+claude plugin update md-eval-plan-gate@md-eval
+claude plugin disable md-eval-plan-gate@md-eval          # turn the gate off, keep it installed
+claude plugin uninstall md-eval-plan-gate@md-eval        # remove it
+```
+
+Plugins change only when a new release is published. Commits to `main` don't affect
+installed plugins.
+
+## Releasing
+
+For maintainers. Releases are cut from a clean `main`:
+
+```sh
+scripts/release.sh 0.2.0
+git push origin main v0.2.0
+```
+
+The script sets one version in `pyproject.toml` and both `plugin.json` files, re-pins the
+plugins' `uvx` sources to the new tag, runs `claude plugin validate`, then commits and
+tags. Update `plugins/md-eval/skills/eval-docs/SKILL.md` first if CLI flags or JSON
+fields changed.
 
 ## Customizing
 
