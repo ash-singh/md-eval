@@ -135,12 +135,13 @@ def print_summary(console: Console, results: list[DocResult], args, readers, wei
         shown = [d for d in dims if both is False or d.is_flag]
         legend = "  ".join(f"{d.short}={d.label}" for d in shown if d.short != d.label)
         subtotals = "Wrt/Sub = writing/substance subtotals  ·  " if "human" in readers else ""
-        console.print(f"[dim]{subtotals}{legend}[/]")
+        console.print(f"[dim]{subtotals}{legend}[/]", highlight=False)
         if both:
-            console.print("[dim]use --details for every dimension[/]")
+            console.print("[dim]use --details for every dimension[/]", highlight=False)
         console.print(
             f"[dim]? = confidence < {args.min_confidence}  ·  flags raised at P(yes) ≥ {args.flag_threshold}  ·  "
-            f"weights: {', '.join(f'{d.id}={weights[d.id]:g}' for d in dims if not d.is_flag)}[/]"
+            f"weights: {', '.join(f'{d.id}={weights[d.id]:g}' for d in dims if not d.is_flag)}[/]",
+            highlight=False,
         )
     for r in results:
         if not r.ok:

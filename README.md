@@ -17,6 +17,12 @@ reader (plus writing/substance subtotals for humans). Flags are reported separat
 and never averaged into a total. Scores with low model confidence are marked `?`.
 With `--reader both`, documents are ranked by the mean of the Human and Agent totals.
 
+![md-eval output for the example docs, default agent reader](docs/sample-output-agent.svg)
+
+With `--reader both`, the same docs ranked for human reviewers and AI agents side by side:
+
+![md-eval output for the example docs with --reader both](docs/sample-output-both.svg)
+
 ## Setup
 
 ```sh
@@ -37,6 +43,9 @@ uv run md-eval docs/ --json results.json        # raw scores, confidences, level
 uv run md-eval docs/ --json - | jq '.[].total'  # JSON on stdout, table on stderr
 uv run md-eval docs/ --dry-run                  # show the request + token estimates, no API call
 ```
+
+The screenshots are real runs, regenerated with `uv run python scripts/screenshots.py`
+(this calls the API).
 
 Other options: `--flag-threshold` (default 0.5), `--min-confidence` (default 0.5),
 `--concurrency` (default 4), `--model` (default `jev-latest`). The exit code is 1 if
@@ -61,10 +70,10 @@ are skipped with a message rather than truncated, because dimensions like
 
 | File | Written for | Expected result |
 | --- | --- | --- |
-| `strong-rate-limiter.md` | Human reviewers | High human scores, no flags |
-| `agent-task-retry.md` | An AI coding agent | High agent score, lower human score |
-| `thin-caching.md` | Nobody in particular | Low scores on both |
-| `risky-migration.md` | Flag testing | Unfinished, Unsupported claims, Secrets and PII flags |
+| `strong-rate-limiter.md` | Human reviewers | Highest human score. Unsupported claims is borderline (P(yes) about 0.5) because the "~40x the Redis memory" estimate has no calculation |
+| `agent-task-retry.md` | An AI coding agent | Highest agent score, low human substance score |
+| `thin-caching.md` | Nobody in particular | Low scores on both, Unsupported claims flag |
+| `risky-migration.md` | Flag testing | Lowest agent score, Unfinished, Unsupported claims, Secrets and PII flags |
 
 > **All credentials, hostnames, names and contact details in `examples/` are fabricated.**
 > They exist only so the Secrets and PII flags have something to detect. None of them
