@@ -24,6 +24,7 @@ from rich.table import Table
 from typesafe_sdk import AsyncTypeSafeClient, Choice, Noul, Score, TypeSafeError
 
 from .evaluate import MAX_STATE_TOKENS, estimate_tokens
+from .log import Timer, log_event, short_hash
 
 NONE_FIT = "none_fit"
 
@@ -214,6 +215,7 @@ class DecisionResult:
     status: str
     recommendation: str | None
     reasons: list[str]
+    reason_codes: list[str]  # one short code per reason, for counting (see interpret)
     ranking: list[OptionResult]
     needs_user_input: float
     holistic: dict
@@ -264,51 +266,56 @@ def interpret(decision: dict, answers, thresholds: Thresholds) -> DecisionResult
     holistic = {"choice": best.choice, "confidence": best.confidence, "probabilities": dict(best.probabilities)}
     needs_user = answers["needs_user"].noul
     viable = [r for r in results if r.viable]
-    reasons: list[str] = []
+    # (code, text) pairs. Codes: veto, all_vetoed, vague, needs_user, close_margin,
+    # could_flip, none_fit, holistic_disagrees.
+    reasons: list[tuple[str, str]] = []
 
     for r in results:
         for constraint, p in r.vetoes.items():
             if p >= thresholds.veto:
-                reasons.append(f"{r.id} likely violates constraint {constraint!r} (P={p:.2f})")
+                reasons.append(("veto", f"{r.id} likely violates constraint {constraint!r} (P={p:.2f})"))
 
     vague = [r for r in results if r.vague >= thresholds.vague]
     if not viable:
         status = "no_viable_option"
-        reasons.append("every option likely violates a constraint")
+        reasons.append(("all_vetoed", "every option likely violates a constraint"))
     elif vague:
         status = "clarify_options"
-        reasons += [f"{r.id} is too vague to judge (P={r.vague:.2f})" for r in vague]
+        reasons += [("vague", f"{r.id} is too vague to judge (P={r.vague:.2f})") for r in vague]
     else:
-        ask: list[str] = []
+        ask: list[tuple[str, str]] = []
         top = viable[0]
         if needs_user >= thresholds.ask:
-            ask.append(f"the choice likely depends on a preference or fact only the user knows (P={needs_user:.2f})")
+            ask.append(("needs_user", f"the choice likely depends on a preference or fact only the user knows (P={needs_user:.2f})"))
         if len(viable) > 1 and top.total - viable[1].total < thresholds.margin:
-            ask.append(
+            ask.append((
+                "close_margin",
                 f"{top.id} leads {viable[1].id} by only {(top.total - viable[1].total) * 100:.0f} points "
-                f"(margin {thresholds.margin * 100:.0f})"
-            )
+                f"(margin {thresholds.margin * 100:.0f})",
+            ))
         # Uncertain scores matter only if they could flip the result: push the leader's
         # low-confidence scores to 0 and each rival's to 1, and see whether a rival catches up.
         worst_top = bounded_total(top, weights, thresholds.min_confidence, 0.0)
         for r in viable[1:]:
             best_r = bounded_total(r, weights, thresholds.min_confidence, 1.0)
             if best_r > worst_top and (worst_top < top.total or best_r > r.total):
-                ask.append(
+                ask.append((
+                    "could_flip",
                     f"low-confidence scores could flip {top.id} vs {r.id} "
-                    f"({top.id} could fall to {fmt(worst_top)}, {r.id} could reach {fmt(best_r)})"
-                )
+                    f"({top.id} could fall to {fmt(worst_top)}, {r.id} could reach {fmt(best_r)})",
+                ))
         if best.choice == NONE_FIT:
-            ask.append(f"the holistic judgment is that no option fits (P={best.probabilities.get(NONE_FIT, 0):.2f})")
+            ask.append(("none_fit", f"the holistic judgment is that no option fits (P={best.probabilities.get(NONE_FIT, 0):.2f})"))
         elif best.choice != top.id:
-            ask.append(f"the holistic pick {best.choice} disagrees with the weighted top {top.id}")
+            ask.append(("holistic_disagrees", f"the holistic pick {best.choice} disagrees with the weighted top {top.id}"))
         status = "ask_user" if ask else "proceed"
         reasons += ask
 
     return DecisionResult(
         status=status,
         recommendation=viable[0].id if status in ("proceed", "ask_user") else None,
-        reasons=reasons,
+        reasons=[text for _, text in reasons],
+        reason_codes=[code for code, _ in reasons],
         ranking=results,
         needs_user_input=needs_user,
         holistic=holistic,
@@ -428,7 +435,8 @@ def main(argv: list[str]) -> int:
             return await decide(decision, thresholds, client)
 
     try:
-        result = asyncio.run(run())
+        with Timer() as timer:
+            result = asyncio.run(run())
     except DecisionError as e:
         err.print(f"[red]{e}[/]")
         return 2
@@ -436,6 +444,17 @@ def main(argv: list[str]) -> int:
         err.print(f"[red]{e}[/]\nSet TYPESAFE_API_KEY in your environment or in a .env file.")
         return 2 if "key" in str(e).lower() else 1
 
+    log_event(
+        "decide",
+        status=result.status,
+        recommendation=result.recommendation,
+        reason_codes=result.reason_codes,
+        options=[{"id": o.id, "total": round(o.total, 3), "viable": o.viable} for o in result.ranking],
+        holistic=result.holistic["choice"],
+        needs_user_input=round(result.needs_user_input, 3),
+        subject=short_hash(decision["problem"]),
+        api_ms=timer.ms,
+    )
     print_result(console, decision, result)
     if args.json:
         payload = json.dumps(asdict(result), indent=2)

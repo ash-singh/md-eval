@@ -10,7 +10,8 @@ A page is sent back when it is a written document that scores below the threshol
 when a blocking flag is raised (by default secrets, PII, unfinished content and
 contradictions; unsupported claims are only mentioned). Each file is sent back at most
 MD_EVAL_ARTIFACT_MAX_BLOCKS times per session (default 1), so publishing again after
-that goes through, and unchanged text is never scored twice. Fails open on any error.
+that goes through (a revised page is still scored and logged, then allowed). Unchanged
+text is never scored twice. Fails open on any error.
 """
 
 import asyncio
@@ -24,7 +25,8 @@ from typesafe_sdk import AsyncTypeSafeClient, Noul
 
 from .dimensions import DIMENSIONS, dimensions_for
 from .evaluate import MAX_STATE_TOKENS, DocResult, build_questions, build_state, fill_result, request_tokens
-from .hookutil import deny, env_float, flag_label, missing_key_notice, run_hook, session_file, weakest_lines
+from .hookutil import deny, env_float, flag_label, log_check, missing_key_notice, run_hook, session_file, weakest_lines
+from .log import Timer
 
 HOOK = "artifact-hook"
 READERS = ("page",)
@@ -183,12 +185,13 @@ def run(payload: dict) -> dict | None:
     state = json.loads(state_file.read_text()) if state_file.exists() else {"blocks": 0, "text": ""}
     text_hash = hashlib.sha256(text.encode()).hexdigest()
     max_blocks = int(env_float("MD_EVAL_ARTIFACT_MAX_BLOCKS", 1))
-    if state["blocks"] >= max_blocks or state["text"] == text_hash:
+    if state["text"] == text_hash:
         return None
     state["text"] = text_hash
     state_file.write_text(json.dumps(state))
 
-    result, p_doc = asyncio.run(_score(path, text))
+    with Timer() as timer:
+        result, p_doc = asyncio.run(_score(path, text))
     if not result.ok:
         return None
 
@@ -209,7 +212,11 @@ def run(payload: dict) -> dict | None:
         if is_doc
         else "md-eval: page checked for flags (not scored as prose)"
     )
-    if not failing:
+    blocks = state["blocks"]
+    outcome = "passed" if not failing else "allowed_after_limit" if blocks >= max_blocks else "sent_back"
+    log_check(HOOK, session_id, str(path.resolve()), text, result, total, blocking, outcome, blocks, timer.ms,
+              written_document=round(p_doc, 3))
+    if outcome != "sent_back":
         return {"systemMessage": summary}
 
     state["blocks"] += 1

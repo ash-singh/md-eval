@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: Tests (no network, no API key)
+        run: uv run pytest -q
+      - name: CLI dry runs
+        run: |
+          uv run md-eval examples --dry-run
+          uv run md-eval examples --reader page --dry-run
+          uv run md-eval decide examples/decisions/profile-cache.json --dry-run

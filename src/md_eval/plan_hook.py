@@ -15,7 +15,8 @@ from pathlib import Path
 
 from .dimensions import DIMENSIONS, dimensions_for
 from .evaluate import evaluate_all
-from .hookutil import deny, env_float, flag_label, missing_key_notice, run_hook, session_file, weakest_lines
+from .hookutil import deny, env_float, flag_label, log_check, missing_key_notice, run_hook, session_file, weakest_lines
+from .log import Timer
 
 HOOK = "plan-hook"
 READERS = ("agent",)
@@ -58,18 +59,22 @@ def run(payload: dict) -> dict | None:
     flag_threshold = env_float("MD_EVAL_PLAN_FLAG_THRESHOLD", 0.5)
     min_conf = env_float("MD_EVAL_PLAN_MIN_CONFIDENCE", 0.5)
 
-    [result] = asyncio.run(
-        evaluate_all([(Path("plan.md"), plan)], None, dimensions_for(READERS), 1, None)
-    )
+    with Timer() as timer:
+        [result] = asyncio.run(
+            evaluate_all([(Path("plan.md"), plan)], None, dimensions_for(READERS), 1, None)
+        )
     if not result.ok:
         return None
 
     weights = {d.id: d.weight for d in DIMENSIONS if not d.is_flag}
     total = result.total("agent", weights)
-    failing = total < min_score or result.raised_flags(flag_threshold)
+    flags = result.raised_flags(flag_threshold)
+    failing = total < min_score or flags
     summary = f"md-eval: plan scored {total * 100:.0f}/100 for agent readiness"
 
-    if not failing or blocks >= max_blocks:
+    outcome = "passed" if not failing else "allowed_after_limit" if blocks >= max_blocks else "sent_back"
+    log_check(HOOK, session_id, "plan", plan, result, total, flags, outcome, blocks, timer.ms)
+    if outcome != "sent_back":
         return {"systemMessage": summary}
 
     counter.write_text(str(blocks + 1))

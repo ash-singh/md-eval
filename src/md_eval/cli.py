@@ -39,7 +39,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         prog="md-eval",
         description="Evaluate technical documents / RFCs for human readers and/or AI "
         "coding agents, plus risk flags, using the TypeSafe API.",
-        epilog="To score options for a decision instead, run 'md-eval decide --help'.",
+        epilog="Subcommands: 'md-eval decide' scores options for a decision; 'md-eval stats' "
+        "summarizes the local decision log.",
     )
     p.add_argument("paths", nargs="+", type=Path, help="Markdown files (.md, .markdown) or directories searched recursively for them")
     p.add_argument(
@@ -231,10 +232,15 @@ def dry_run(console: Console, docs: list[tuple[Path, str]], audience: str | None
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if argv and argv[0] == "decide":
-        from .decide import main as decide_main
+    # Subcommands, unless the first argument is an existing path (a folder named "decide").
+    if argv and argv[0] in {"decide", "stats"} and not Path(argv[0]).exists():
+        if argv[0] == "decide":
+            from .decide import main as decide_main
 
-        return decide_main(argv[1:])
+            return decide_main(argv[1:])
+        from .log import main as stats_main
+
+        return stats_main(argv[1:])
 
     args = parse_args(argv)
     load_dotenv(find_dotenv(usecwd=True))

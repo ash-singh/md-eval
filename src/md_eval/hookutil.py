@@ -12,6 +12,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from .dimensions import DIMENSIONS
 from .evaluate import DocResult
+from .log import log_event, short_hash
 
 WEAKEST = 3
 KEY_URL = "https://console.typesafe.ai"
@@ -61,6 +62,24 @@ def weakest_lines(result: DocResult, min_conf: float, strong: str, skip: tuple[s
 
 def flag_label(dim_id: str) -> str:
     return next(d.label for d in DIMENSIONS if d.id == dim_id)
+
+
+def log_check(hook: str, session_id: str, subject: str, text: str, result: DocResult, total: float,
+              flags: list[str], outcome: str, blocks: int, api_ms: int, **extra) -> None:
+    """Log one scored gate check. Text, session and subject are stored as hashes only."""
+    log_event(
+        hook,
+        session=short_hash(session_id),
+        subject=short_hash(subject),
+        text=short_hash(text),
+        total=round(total, 3),
+        scores={k: round(v.score, 3) for k, v in result.scores.items()},
+        flags=flags,
+        outcome=outcome,
+        blocks=blocks,
+        api_ms=api_ms,
+        **extra,
+    )
 
 
 def deny(summary: str, reason: str) -> dict:

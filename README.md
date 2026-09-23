@@ -185,6 +185,22 @@ a key, each says so once per session. Tune them with environment variables:
 | `MD_EVAL_ARTIFACT_DOC_THRESHOLD` | `0.5` | P(written document) at which a page's writing is scored |
 | `MD_EVAL_ARTIFACT_MIN_CONFIDENCE` | `0.5` | Mark scores below this confidence as low confidence |
 
+### Decision log
+
+Each gate check and `md-eval decide` run adds one line to a local log at
+`~/.cache/md-eval/decisions.jsonl`. It records scores, outcomes, raised flags, reason codes
+and API time. Text, session ids and file paths are stored only as short hashes, so the log
+never contains your plans, pages or decisions. It is never sent anywhere. Summarize it with:
+
+```sh
+md-eval stats          # or: uvx --from git+https://github.com/ash-singh/md-eval md-eval stats
+```
+
+The summary shows, per tool, how often each outcome happened, median and p90 API time, the
+most common reasons and flags, and whether revised plans and pages scored higher after
+being sent back. API time excludes `uvx` startup, which adds to what you notice. Set
+`MD_EVAL_LOG=off` to disable the log, or `MD_EVAL_LOG=<path>` to move it.
+
 ### Update, disable, remove
 
 ```sh
@@ -199,6 +215,15 @@ claude plugin uninstall md-eval-artifact-gate@md-eval    # remove it
 Plugins change only when a new release is published. Commits to `main` don't affect
 installed plugins.
 
+## Development
+
+```sh
+uv sync
+uv run pytest        # offline: the API is mocked, no key or network needed
+```
+
+CI runs the tests and the `--dry-run` commands on every push and pull request.
+
 ## Releasing
 
 For maintainers. Releases are cut from a clean `main`:
@@ -208,7 +233,7 @@ scripts/release.sh 0.2.0
 git push origin main v0.2.0
 ```
 
-The script sets one version in `pyproject.toml` and every `plugin.json` file, re-pins the
+The script runs the tests, then sets one version in `pyproject.toml` and every `plugin.json` file, re-pins the
 plugins' `uvx` sources to the new tag, runs `claude plugin validate`, then commits and
 tags. Update the skills in `plugins/md-eval/skills/` first if CLI flags or JSON
 fields changed.

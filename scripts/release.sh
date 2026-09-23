@@ -24,6 +24,9 @@ if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   exit 1
 fi
 
+# Tests must pass before anything is edited or tagged.
+uv run pytest -q
+
 # One version number: the Python package and every plugin.
 perl -pi -e "s/^version = \"[^\"]*\"/version = \"$version\"/" pyproject.toml
 for manifest in plugins/*/.claude-plugin/plugin.json; do
