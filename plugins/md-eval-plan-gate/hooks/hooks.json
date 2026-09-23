@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --quiet --from git+https://github.com/ash-singh/md-eval md-eval-plan-hook || true",
+            "command": "uvx --quiet --from git+https://github.com/ash-singh/md-eval@v0.1.0 md-eval-plan-hook || true",
             "timeout": 120
           }
         ]
