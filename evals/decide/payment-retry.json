@@ -1,0 +1,39 @@
+{
+  "problem": "Calls to the payment provider's POST /charges sometimes time out, and we don't know whether the charge went through",
+  "context": "About 0.3% of charge requests time out after 10 s. Today we show the customer an error, and some customers then pay twice by retrying manually.",
+  "key_facts": "The provider supports an Idempotency-Key header: repeating a request with the same key within 24 hours returns the original result instead of creating a new charge.",
+  "constraints": [
+    "Must never charge a customer twice for one order"
+  ],
+  "options": [
+    {
+      "id": "blind_retry",
+      "summary": "Automatically retry the POST /charges request up to 3 times on timeout"
+    },
+    {
+      "id": "idempotent_retry",
+      "summary": "Send an Idempotency-Key derived from the order id with every charge, and retry with the same key on timeout"
+    },
+    {
+      "id": "no_retry",
+      "summary": "Keep showing an error on timeout, and ask the customer to check their bank statement before retrying"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "outcome",
+      "description": "Customers end up charged exactly once without manual effort",
+      "weight": 2
+    },
+    {
+      "id": "simplicity",
+      "description": "Little code and operational effort"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "idempotent_retry"
+    ],
+    "why": "Idempotency keys make retries safe; blind retries can double-charge; no_retry keeps the current harm."
+  }
+}

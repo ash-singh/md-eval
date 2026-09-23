@@ -148,3 +148,18 @@ def test_folder_named_decide_is_evaluated_not_dispatched(tmp_path, api, capsys):
 def test_real_client_class_is_not_used(api):
     # Guard for the isolation fixture itself.
     assert decide_mod.AsyncTypeSafeClient is not AsyncTypeSafeClient
+
+
+def test_eval_cases_are_valid():
+    cases = sorted((Path(__file__).parent.parent / "evals" / "decide").glob("*.json"))
+    assert len(cases) >= 10
+    statuses = {"proceed", "ask_user", "clarify_options", "no_viable_option"}
+    for path in cases:
+        case = json.loads(path.read_text())
+        validate(case)
+        ids = {o["id"] for o in case["options"]}
+        expected = case["expected"]
+        assert set(expected.get("acceptable", [])) <= ids, path.name
+        assert set(expected.get("status", [])) <= statuses, path.name
+        assert expected.get("acceptable") or expected.get("status"), path.name
+        assert expected.get("why"), path.name

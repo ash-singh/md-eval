@@ -1,0 +1,40 @@
+{
+  "problem": "A page-view counter loses increments under concurrent requests",
+  "context": "The app reads the counter row, adds one in application code, and writes it back. It runs as 3 instances behind a load balancer on PostgreSQL.",
+  "constraints": [
+    "Must not lose increments under concurrency"
+  ],
+  "options": [
+    {
+      "id": "atomic_update",
+      "summary": "Replace read-modify-write with a single UPDATE counters SET n = n + 1 WHERE id = $1"
+    },
+    {
+      "id": "row_lock",
+      "summary": "Read the row with SELECT ... FOR UPDATE inside a transaction, then write n + 1"
+    },
+    {
+      "id": "app_mutex",
+      "summary": "Wrap the read-modify-write in an in-process mutex in the application"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "correctness",
+      "description": "No lost increments across all instances",
+      "weight": 3
+    },
+    {
+      "id": "performance",
+      "description": "Low contention and latency under load"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "atomic_update",
+      "row_lock"
+    ],
+    "best": "atomic_update",
+    "why": "An in-process mutex doesn't coordinate across 3 instances; the atomic UPDATE is simplest and fastest."
+  }
+}

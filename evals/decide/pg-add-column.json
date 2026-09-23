@@ -1,0 +1,39 @@
+{
+  "problem": "Add a non-null boolean column is_archived with default false to the orders table in production",
+  "context": "PostgreSQL 15. The orders table has 50 million rows and takes steady write traffic. Migrations run through our standard migration tool in a single transaction.",
+  "key_facts": "Since PostgreSQL 11, ADD COLUMN with a constant default is a metadata-only change: it does not rewrite the table and holds its ACCESS EXCLUSIVE lock only briefly.",
+  "constraints": [
+    "The orders table must stay writable throughout; no multi-minute locks"
+  ],
+  "options": [
+    {
+      "id": "direct",
+      "summary": "ALTER TABLE orders ADD COLUMN is_archived boolean NOT NULL DEFAULT false in one migration"
+    },
+    {
+      "id": "backfill",
+      "summary": "Add the column as nullable, backfill false in batches of 10k rows, then add a NOT NULL constraint with NOT VALID and validate it separately"
+    },
+    {
+      "id": "new_table",
+      "summary": "Create orders_v2 with the new column, dual-write from the app, copy historical rows, then swap tables"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "safety",
+      "description": "Low risk of locking or downtime on a large, busy table",
+      "weight": 2
+    },
+    {
+      "id": "simplicity",
+      "description": "Few steps and little code to write and operate"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "direct"
+    ],
+    "why": "Constant defaults are metadata-only since PG 11; the elaborate options add risk and work for nothing."
+  }
+}

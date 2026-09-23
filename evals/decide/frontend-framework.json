@@ -1,0 +1,37 @@
+{
+  "problem": "Choose a frontend framework for a new internal admin tool",
+  "context": "A small team will build and maintain it. The tool has about 20 screens of forms and tables.",
+  "constraints": [],
+  "options": [
+    {
+      "id": "react",
+      "summary": "React with Vite and a component library"
+    },
+    {
+      "id": "vue",
+      "summary": "Vue 3 with Vite and a component library"
+    },
+    {
+      "id": "svelte",
+      "summary": "SvelteKit with a component library"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "productivity",
+      "description": "The team can build and change screens quickly",
+      "weight": 2
+    },
+    {
+      "id": "maintenance",
+      "description": "Easy to maintain and hire for over several years"
+    }
+  ],
+  "expected": {
+    "acceptable": [],
+    "status": [
+      "ask_user"
+    ],
+    "why": "All three are viable; the deciding fact (what the team already knows) isn't stated."
+  }
+}

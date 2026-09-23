@@ -1,0 +1,42 @@
+{
+  "problem": "Cut p95 latency on the /profile endpoint, currently 900 ms, mostly spent loading the user profile from Postgres",
+  "context": "Single region, 3 app instances behind a load balancer. Redis is already deployed and used for sessions. Profiles change a few times a day per user. Users may see profile data up to 60 seconds stale.",
+  "constraints": [
+    "Must not add new infrastructure components"
+  ],
+  "options": [
+    {
+      "id": "redis",
+      "summary": "Cache serialized profiles in the existing Redis with a 60 s TTL, invalidated on profile update"
+    },
+    {
+      "id": "memory",
+      "summary": "Per-instance in-process LRU cache of profiles with a 60 s TTL"
+    },
+    {
+      "id": "memcached",
+      "summary": "Deploy a Memcached cluster and cache profiles there with a 60 s TTL"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "fit",
+      "description": "Reduces p95 latency of /profile substantially",
+      "weight": 2
+    },
+    {
+      "id": "simplicity",
+      "description": "Little new code and few moving parts to operate"
+    },
+    {
+      "id": "consistency",
+      "description": "All instances serve the same profile data after an update"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "redis"
+    ],
+    "why": "Uses existing infrastructure, shared across instances, invalidated on update; memcached is new infrastructure."
+  }
+}

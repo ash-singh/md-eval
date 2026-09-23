@@ -1,0 +1,39 @@
+{
+  "problem": "A bug in our HTTP client library, version 2.3.0, corrupts large gzip responses; we need it fixed",
+  "context": "The bug is reported upstream. We pin exact dependency versions and have good integration tests.",
+  "key_facts": "Upstream released 2.3.1 last week. Its changelog lists only this fix, and the library follows semantic versioning.",
+  "constraints": [
+    "Must not delay the fix beyond this week"
+  ],
+  "options": [
+    {
+      "id": "upgrade",
+      "summary": "Upgrade the pinned version from 2.3.0 to 2.3.1 and run the integration tests"
+    },
+    {
+      "id": "vendor_patch",
+      "summary": "Vendor the library into our repo and apply the upstream fix by hand"
+    },
+    {
+      "id": "workaround",
+      "summary": "Disable gzip for large responses in our calls to work around the bug"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "fix_quality",
+      "description": "Fixes the root cause with little risk of regressions",
+      "weight": 2
+    },
+    {
+      "id": "maintenance",
+      "description": "No ongoing maintenance burden"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "upgrade"
+    ],
+    "why": "A patch release containing only the fix is the lowest-risk, lowest-maintenance route."
+  }
+}

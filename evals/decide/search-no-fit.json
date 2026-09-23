@@ -1,0 +1,41 @@
+{
+  "problem": "Add search over 10 million product descriptions, returning results in under 100 ms",
+  "context": "Data lives in PostgreSQL 15. Queries are keyword searches typed by users.",
+  "constraints": [
+    "Must not add new infrastructure or third-party services",
+    "p95 search latency must stay under 100 ms"
+  ],
+  "options": [
+    {
+      "id": "elasticsearch",
+      "summary": "Deploy an Elasticsearch cluster and index the descriptions"
+    },
+    {
+      "id": "algolia",
+      "summary": "Send the descriptions to Algolia and query its hosted search API"
+    },
+    {
+      "id": "ilike",
+      "summary": "Query with WHERE description ILIKE '%' || $1 || '%' and no index"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "latency",
+      "description": "Meets the 100 ms p95 target",
+      "weight": 2
+    },
+    {
+      "id": "relevance",
+      "description": "Returns relevant results for keyword queries"
+    }
+  ],
+  "expected": {
+    "acceptable": [],
+    "status": [
+      "no_viable_option",
+      "ask_user"
+    ],
+    "why": "The first two break the no-new-infrastructure rule; an unindexed ILIKE scan of 10M rows can't meet 100 ms. The right answer (Postgres full-text search) isn't listed."
+  }
+}

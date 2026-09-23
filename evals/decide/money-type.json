@@ -1,0 +1,39 @@
+{
+  "problem": "Choose a column type for order amounts in a new billing service",
+  "context": "PostgreSQL. Amounts are in currencies with at most 2 decimal places. Totals, taxes and refunds are summed and compared exactly.",
+  "constraints": [
+    "Sums and comparisons of amounts must be exact"
+  ],
+  "options": [
+    {
+      "id": "float",
+      "summary": "double precision column holding the amount in major units, e.g. 19.99"
+    },
+    {
+      "id": "numeric",
+      "summary": "numeric(12,2) column holding the amount in major units"
+    },
+    {
+      "id": "minor_units",
+      "summary": "bigint column holding the amount in minor units (cents), e.g. 1999"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "correctness",
+      "description": "Exact arithmetic with no rounding surprises",
+      "weight": 3
+    },
+    {
+      "id": "simplicity",
+      "description": "Easy to use correctly in application code"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "numeric",
+      "minor_units"
+    ],
+    "why": "Floating point can't represent most decimal amounts exactly; both exact types are standard."
+  }
+}

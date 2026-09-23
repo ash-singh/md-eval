@@ -1,0 +1,38 @@
+{
+  "problem": "Rename the column users.fullname to users.display_name, which the running application reads and writes",
+  "context": "Web app deployed with rolling deploys, so old and new app versions run side by side for several minutes. PostgreSQL.",
+  "constraints": [
+    "No downtime and no failed requests during the change"
+  ],
+  "options": [
+    {
+      "id": "rename_in_place",
+      "summary": "ALTER TABLE users RENAME COLUMN fullname TO display_name, deployed with the app change"
+    },
+    {
+      "id": "expand_contract",
+      "summary": "Add display_name, dual-write both columns, backfill, switch reads, then drop fullname in a later release"
+    },
+    {
+      "id": "maintenance_window",
+      "summary": "Take the app offline for 10 minutes, rename the column and deploy the new version"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "safety",
+      "description": "No errors or downtime during the rollout",
+      "weight": 3
+    },
+    {
+      "id": "effort",
+      "description": "Little work to carry out"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "expand_contract"
+    ],
+    "why": "During a rolling deploy, old code breaks on a renamed column; a maintenance window violates the constraint."
+  }
+}

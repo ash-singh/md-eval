@@ -21,8 +21,9 @@ uv run md-eval examples --dry-run              # print request + token estimates
 uv run md-eval decide examples/decisions/profile-cache.json   # score options for a decision
 uv run md-eval stats                           # summarize the local decision log
 uv run pytest                                  # offline tests (mock API; no key or network)
+uv run python scripts/eval_decide.py           # decide vs known answers in evals/decide/ (calls the API)
 uv run python scripts/screenshots.py           # regenerate README screenshots in docs/ (calls the API)
-scripts/release.sh 0.2.0                       # cut a release: versions, plugin pins, commit, tag
+scripts/release.sh 0.5.0                       # cut a release: tests, versions, tag, then sha pins
 ```
 
 - Real runs need `TYPESAFE_API_KEY`, read from the environment or a `.env` found by searching
@@ -70,6 +71,10 @@ Modules in `src/md_eval/`, driven by one data table:
   parallel list of `reason_codes` (logged instead of the text).
   Vetoes never feed into totals. `decide()` takes an injected client, so it can be tested
   with a `MockTransport`.
+- **`evals/decide/*.json`** are decisions with an `expected` block (`acceptable` option ids
+  and/or allowed `status` values, plus `why`) and optional `key_facts`. The eval appends the
+  facts for its "informed" variant. `tests/test_decide.py` checks that every case is valid.
+  Changing decide's questions or thresholds? Rerun the eval before and after.
 - **`log.py`** appends one JSON line per gate check or `decide` run to
   `~/.cache/md-eval/decisions.jsonl` (`MD_EVAL_LOG` overrides; `off` disables). It stores
   scores, outcomes and reason codes, and only hashes of text, session ids and paths. Writes
@@ -121,10 +126,13 @@ The repo root is a plugin marketplace (`.claude-plugin/marketplace.json`) with t
 the CLI and read its JSON output) and `plugins/md-eval-plan-gate` (a `hooks.json` wiring `md-eval-plan-hook`
 to `ExitPlanMode`) and `plugins/md-eval-artifact-gate` (wiring `md-eval-artifact-hook` to
 `Artifact`). Both run the CLI from GitHub via
-`uvx --from git+https://github.com/ash-singh/md-eval@vX.Y.Z`, pinned to a release tag, so
-pushes to `main` don't reach plugin users until the next release.
+`uvx --from git+https://github.com/ash-singh/md-eval@<sha>`, pinned to the commit tagged by
+the last release, so pushes to `main` don't reach plugin users until the next release. Pin
+a sha, not a tag: uv fetches a tag from GitHub on every call (about 1.2 s per hook) but
+serves a sha from cache (about 0.2 s), and a sha can't be moved.
 
 - Update the skills in `plugins/md-eval/skills/` if CLI flags or JSON fields change.
 - Release with `scripts/release.sh X.Y.Z`, then `git push origin main vX.Y.Z`. It sets one
-  version in `pyproject.toml` and every `plugin.json` file (after running the tests), re-pins the uvx sources, validates
-  the manifests, commits and tags. Don't edit versions or pins by hand.
+  version in `pyproject.toml` and every `plugin.json` file (after running the tests),
+  validates the manifests, commits and tags, then pins the uvx sources to the tagged commit's
+  sha in a second commit. Don't edit versions or pins by hand.

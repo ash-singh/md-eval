@@ -1,0 +1,39 @@
+{
+  "problem": "Image resizing in a Node.js API blocks the event loop, so all other requests stall for up to 2 s",
+  "context": "The resize is pure JavaScript (no native module), called inside an Express handler.",
+  "key_facts": "async/await does not move CPU-bound JavaScript off the main thread. UV_THREADPOOL_SIZE only sizes libuv's pool for I/O and some native modules, not ordinary JavaScript.",
+  "constraints": [
+    "Other requests must keep being served while an image is resized"
+  ],
+  "options": [
+    {
+      "id": "worker_threads",
+      "summary": "Run the resize in a pool of worker_threads and await the result in the handler"
+    },
+    {
+      "id": "async_await",
+      "summary": "Make the resize function async and await it in the handler"
+    },
+    {
+      "id": "threadpool_size",
+      "summary": "Raise UV_THREADPOOL_SIZE from 4 to 16"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "effectiveness",
+      "description": "Keeps the event loop free during resizes",
+      "weight": 3
+    },
+    {
+      "id": "simplicity",
+      "description": "Small change to the code"
+    }
+  ],
+  "expected": {
+    "acceptable": [
+      "worker_threads"
+    ],
+    "why": "Only worker threads move CPU-bound JS off the main thread; the other two are common misconceptions."
+  }
+}

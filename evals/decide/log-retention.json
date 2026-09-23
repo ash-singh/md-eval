@@ -1,0 +1,37 @@
+{
+  "problem": "Decide how long to keep application logs that contain customer IP addresses",
+  "context": "Logs are used for debugging and incident investigation. Storage cost is not a concern.",
+  "constraints": [],
+  "options": [
+    {
+      "id": "days_30",
+      "summary": "Keep logs for 30 days, then delete them"
+    },
+    {
+      "id": "year_1",
+      "summary": "Keep logs for 1 year, then delete them"
+    },
+    {
+      "id": "forever",
+      "summary": "Keep logs indefinitely in cold storage"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "usefulness",
+      "description": "Logs are available when investigations need them"
+    },
+    {
+      "id": "compliance",
+      "description": "Meets legal and privacy obligations for personal data",
+      "weight": 2
+    }
+  ],
+  "expected": {
+    "acceptable": [],
+    "status": [
+      "ask_user"
+    ],
+    "why": "The answer depends on legal obligations and investigation needs the decision doesn't state."
+  }
+}

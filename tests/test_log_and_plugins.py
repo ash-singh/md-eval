@@ -1,5 +1,6 @@
 import json
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -71,18 +72,30 @@ def test_stats_without_log(capsys):
 
 
 def test_versions_and_pins_match_release():
-    """The invariant scripts/release.sh maintains: one version, and every uvx pin at its tag."""
+    """The invariant scripts/release.sh maintains: one version, and every uvx source pinned to
+    the same commit sha (the commit tagged v<version>). Releases up to v0.4.0 pinned the tag."""
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
     manifests = list((ROOT / "plugins").glob("*/.claude-plugin/plugin.json"))
     assert len(manifests) >= 3
     for manifest in manifests:
         assert json.loads(manifest.read_text())["version"] == version, manifest
 
-    pins = []
+    pins = set()
     for path in (ROOT / "plugins").rglob("*"):
         if path.is_file():
-            pins += re.findall(r"git\+https://github\.com/ash-singh/md-eval(@[^ `\"]+)?", path.read_text())
-    assert pins and all(pin == f"@v{version}" for pin in pins), pins
+            pins.update(re.findall(r"git\+https://github\.com/ash-singh/md-eval(@[^ `\"]+)?", path.read_text()))
+    assert len(pins) == 1, pins
+    [pin] = pins
+    if pin == f"@v{version}":
+        return
+    assert re.fullmatch(r"@[0-9a-f]{40}", pin), pin
+    # Where tags are available (not in a shallow CI checkout), the sha must be the tagged commit.
+    tagged = subprocess.run(
+        ["git", "rev-parse", "-q", "--verify", f"refs/tags/v{version}^{{commit}}"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    if tagged.returncode == 0:
+        assert pin[1:] == tagged.stdout.strip()
 
 
 def test_marketplace_lists_every_plugin():

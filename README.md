@@ -107,6 +107,23 @@ test on adding a column to a 50M-row PostgreSQL 15 table, it vetoed the correct 
 stated in `context`, it picked it at 94/100 with `proceed`. Put the facts that settle a
 decision in `context`.
 
+### How well it decides
+
+`evals/decide/` holds 12 decisions with known answers: migrations, retries, concurrency,
+money types, a Node.js performance trap, two decisions that depend on facts only the user
+has, and one where no listed option works. Each runs with the key facts stated in context,
+without them, and with the options reversed:
+
+```sh
+uv run python scripts/eval_decide.py     # calls the API: about 28 requests
+```
+
+Across three runs (84 decisions), `decide` was never confidently wrong. With key facts
+stated, all 12 were right in both option orders. Without them, it missed the PostgreSQL
+case but returned `ask_user`. On 1–2 cases per run it asked the user although its answer
+was right. These cases were written alongside the tool, so treat this as a smoke test, not
+a benchmark. Decisions from real work make better cases.
+
 ## Use with Claude Code
 
 This repo is also a Claude Code plugin marketplace with three plugins:
@@ -129,8 +146,10 @@ This repo is also a Claude Code plugin marketplace with three plugins:
 
 Setup needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and a TypeSafe
 key. No plugin needs a separate install. They run md-eval through `uvx`, pinned to the
-release tag that matches the plugin version. The skills and gates send the text they
-check (docs, decisions, plans, pages) to the TypeSafe API.
+exact commit of the release that matches the plugin version. A commit, unlike a tag, can't
+be changed later, and uv serves it from its cache: each gate check starts in about 0.2 s.
+The skills and gates send the text they check (docs, decisions, plans, pages) to the
+TypeSafe API.
 
 ```sh
 claude plugin marketplace add ash-singh/md-eval
@@ -233,9 +252,10 @@ scripts/release.sh 0.2.0
 git push origin main v0.2.0
 ```
 
-The script runs the tests, then sets one version in `pyproject.toml` and every `plugin.json` file, re-pins the
-plugins' `uvx` sources to the new tag, runs `claude plugin validate`, then commits and
-tags. Update the skills in `plugins/md-eval/skills/` first if CLI flags or JSON
+The script runs the tests, then makes two commits. The first sets one version in
+`pyproject.toml` and every `plugin.json` file, passes `claude plugin validate`, and is tagged.
+The second pins the plugins' `uvx` sources to the first commit's sha. A commit can't
+contain its own sha, so the pins must come in a second commit. Update the skills in `plugins/md-eval/skills/` first if CLI flags or JSON
 fields changed.
 
 ## Customizing
