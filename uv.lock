@@ -113,7 +113,7 @@ wheels = [
 
 [[package]]
 name = "md-eval"
-version = "0.4.0"
+version = "0.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "python-dotenv" },
