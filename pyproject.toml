@@ -1,0 +1,21 @@
+[project]
+name = "md-eval"
+version = "0.1.0"
+description = "Evaluate technical docs / RFCs on multiple dimensions with the TypeSafe API"
+readme = "README.md"
+authors = [
+    { name = "Ashwani Singh", email = "ashwani4u4888@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv>=1.2.3",
+    "rich>=15.0.0",
+    "typesafe-sdk>=0.7.1",
+]
+
+[project.scripts]
+md-eval = "md_eval:main"
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
