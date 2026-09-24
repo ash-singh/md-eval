@@ -1,9 +1,9 @@
 {
-  "description": "Check written pages with md-eval before the Artifact tool publishes them; send weak or risky pages back once per file per session",
+  "description": "Check written pages with md-eval before the Artifact tool publishes them, and Claude Docs writes for secrets and PII; send weak or risky content back once per file or doc per session",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Artifact",
+        "matcher": "Artifact|mcp__claude_ai_Claude_Docs__batch|mcp__claude_ai_Claude_Docs__update",
         "hooks": [
           {
             "type": "command",

@@ -97,6 +97,12 @@ Modules in `src/md_eval/`, driven by one data table:
   dashboards are checked for flags only. It sends a file back at most once per session; a
   changed file after that is still scored and logged, then allowed. Unchanged text is never
   scored twice (state keyed by a hash of the path). It must fail open too.
+  - Claude Docs writes (`mcp__claude_ai_Claude_Docs__batch` / `update`, same hook, wider
+    matcher) are checked for flags only (`MD_EVAL_DOCS_BLOCK_FLAGS`, default secrets + PII),
+    because a write is often a skeleton or one section. `docs_text()` collects written text
+    from `tool_input`, skipping `target`/`anchor`/`intent`. State is keyed by the doc id.
+  - Skips of a publish-like call (typed artifact, too short, unchanged, no key) are logged
+    with outcome `skipped` and a reason code. Read/list calls are not logged.
 
 ## Design rules to preserve
 

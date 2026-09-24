@@ -169,7 +169,7 @@ def test_artifact_weak_page_sent_back_once_then_revision_scored_and_allowed(page
     api.score = lambda qid, q: 3.0
     revised = artifact_hook.run(payload({"file_path": str(page)}))
     assert not denied(revised)
-    assert [e["outcome"] for e in log_events()] == ["sent_back", "passed"]
+    assert [e["outcome"] for e in log_events()] == ["sent_back", "skipped", "passed"]
 
 
 def test_artifact_strong_page_passes(page, api):
@@ -206,6 +206,91 @@ def test_artifact_block_budget_is_per_file(page, tmp_path, api):
     other.write_text(page.read_text())
     assert denied(artifact_hook.run(payload({"file_path": str(page)})))
     assert denied(artifact_hook.run(payload({"file_path": str(other)})))
+
+
+def test_artifact_skips_are_logged_with_a_reason(page, tmp_path, api, log_events):
+    short = tmp_path / "short.html"
+    short.write_text("<p>Hello world</p>")
+    artifact_hook.run(payload({"type_url": "https://x", "title": "t"}))
+    artifact_hook.run(payload({"file_path": str(short)}))
+    artifact_hook.run(payload({"file_path": str(page)}))
+    artifact_hook.run(payload({"file_path": str(page)}))
+    artifact_hook.run(payload({"action": "list"}))  # not a publish: not logged
+    assert [(e["outcome"], e.get("reason_codes")) for e in log_events()] == [
+        ("skipped", ["typed_artifact"]), ("skipped", ["too_short"]), ("passed", None), ("skipped", ["unchanged"]),
+    ]
+
+
+# ---- artifact gate: Claude Docs writes ---------------------------------------------
+
+DOCS_BATCH = "mcp__claude_ai_Claude_Docs__batch"
+DOCS_UPDATE = "mcp__claude_ai_Claude_Docs__update"
+
+
+def docs_payload(tool: str, tool_input: dict, session: str = "s1") -> dict:
+    return {**payload(tool_input, session), "tool_name": tool}
+
+
+def doc_birth(markdown: str) -> dict:
+    return {"container": {"kind": "project", "create": {"name": "Q3 plan", "doc": {
+        "blocks": {"s1": {"type": "pending", "intent": "Goals: the outcomes this quarter commits to"}},
+        "markdown": markdown}}}, "batch": []}
+
+
+def section_fill(content: str) -> dict:
+    return {"ref": {"object": "node", "id": "n1"}, "engine": "prose", "container": {"kind": "project", "id": "doc-1"},
+            "payload": {"ops": [{"op": "replace", "target": {"kind": "find", "text": "quoted old words"},
+                                 "with": {"from": {"kind": "inline", "content": content}, "as": "markdown"}}]}}
+
+
+def test_docs_text_keeps_written_text_only():
+    text = artifact_hook.docs_text(section_fill("## Goals\n\nShip it <?claude block me?> now"))
+    assert text == "## Goals\n\nShip it  now"
+    birth = artifact_hook.docs_text(doc_birth("# Q3 plan\n\n<?claude block s1?>"))
+    assert birth == "# Q3 plan"  # pending intent and chip tokens left out
+
+
+def test_docs_skeleton_is_skipped_and_logged(api, log_events):
+    assert artifact_hook.run(docs_payload(DOCS_BATCH, doc_birth("# Q3 plan\n\n<?claude block s1?>"))) is None
+    assert api.requests == []
+    assert [(e["outcome"], e["reason_codes"]) for e in log_events()] == [("skipped", ["too_short"])]
+
+
+def test_docs_write_asks_flags_only_and_passes(api, log_events):
+    assert artifact_hook.run(docs_payload(DOCS_UPDATE, section_fill(PROSE))) is None
+    [request] = api.requests
+    assert all(q["type"] == "noul" for q in request["questions"].values())
+    [event] = log_events()
+    assert event["outcome"] == "passed" and "total" not in event and PROSE not in json.dumps(event)
+
+
+def test_docs_secret_sent_back_once_per_doc(api, log_events):
+    api.noul = lambda qid, q: 0.95 if qid == "secrets" else 0.05
+    first = artifact_hook.run(docs_payload(DOCS_UPDATE, section_fill(PROSE)))
+    reason = first["hookSpecificOutput"]["permissionDecisionReason"]
+    assert denied(first) and "Before saving:" in reason and "retry the edit" in reason
+    second = artifact_hook.run(docs_payload(DOCS_UPDATE, section_fill(PROSE + " Revised.")))
+    assert not denied(second) and "allowed" in second["systemMessage"]
+    assert [e["outcome"] for e in log_events()] == ["sent_back", "allowed_after_limit"]
+
+
+def test_docs_unfinished_content_does_not_block_by_default(api):
+    api.noul = lambda qid, q: 0.95 if qid == "unfinished_content" else 0.05
+    assert not denied(artifact_hook.run(docs_payload(DOCS_UPDATE, section_fill(PROSE))))
+
+
+@pytest.mark.parametrize("tool", ["ArtifactComments", "ArtifactData", "mcp__claude_ai_Claude_Docs__read"])
+def test_other_tools_are_ignored(tool, page, api, log_events):
+    assert artifact_hook.run({**payload({"file_path": str(page)}), "tool_name": tool}) is None
+    assert api.requests == [] and log_events() == []
+
+
+def test_docs_op_without_text_is_not_logged(api, log_events):
+    move = {"container": {"kind": "project", "id": "doc-1"}, "ref": {"object": "node", "id": "n1"},
+            "payload": {"ops": [{"op": "move", "target": {"kind": "blocks", "ids": ["a.1"]},
+                                 "to": {"target": {"kind": "root"}, "side": "end"}}]}}
+    assert artifact_hook.run(docs_payload(DOCS_UPDATE, move)) is None
+    assert api.requests == [] and log_events() == []
 
 
 # ---- fail open ------------------------------------------------------------------------

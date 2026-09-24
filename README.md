@@ -182,8 +182,9 @@ credential, and asks you before removing personal details. It doesn't rewrite co
 supplied. If you want the page as it is, ask Claude to publish again: each file is sent
 back at most once per session.
 
-The artifact gate only sees pages published with the Artifact tool. Documents written
-through a docs connector (such as Claude Docs) aren't checked.
+Claude Docs writes are checked for the Secrets and PII flags only. Each write often
+holds a skeleton or a single section, so the gate doesn't score it as prose. Each doc is
+sent back at most once per session. Other docs connectors aren't checked.
 
 ### Gate settings
 
@@ -201,6 +202,8 @@ a key, each says so once per session. Tune them with environment variables:
 | `MD_EVAL_ARTIFACT_FLAG_THRESHOLD` | `0.5` | P(yes) at which a flag counts as raised |
 | `MD_EVAL_ARTIFACT_MAX_BLOCKS` | `1` | Times each file can be sent back per session |
 | `MD_EVAL_ARTIFACT_MIN_WORDS` | `150` | Pages with fewer words are not checked |
+| `MD_EVAL_DOCS_BLOCK_FLAGS` | `secrets,pii` | Flags that send a Claude Docs write back |
+| `MD_EVAL_DOCS_MIN_WORDS` | `20` | Claude Docs writes with fewer words are not checked |
 | `MD_EVAL_ARTIFACT_DOC_THRESHOLD` | `0.5` | P(written document) at which a page's writing is scored |
 | `MD_EVAL_ARTIFACT_MIN_CONFIDENCE` | `0.5` | Mark scores below this confidence as low confidence |
 
@@ -209,7 +212,8 @@ a key, each says so once per session. Tune them with environment variables:
 Each gate check and `md-eval decide` run adds one line to a local log at
 `~/.cache/md-eval/decisions.jsonl`. It records scores, outcomes, raised flags, reason codes
 and API time. Text, session ids and file paths are stored only as short hashes, so the log
-never contains your plans, pages or decisions. It is never sent anywhere. Summarize it with:
+never contains your plans, pages or decisions. A check the artifact gate skips (typed
+artifact, too short, unchanged text, no key) is logged as `skipped` with a reason code. It is never sent anywhere. Summarize it with:
 
 ```sh
 md-eval stats          # or: uvx --from git+https://github.com/ash-singh/md-eval md-eval stats
