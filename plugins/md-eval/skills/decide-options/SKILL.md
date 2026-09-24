@@ -30,7 +30,7 @@ confidence. So:
 ## Run it
 
 If `md-eval` is on PATH, use it. Otherwise run it through uv without installing:
-`uvx --quiet --from git+https://github.com/ash-singh/md-eval@867af23641095f5cc869d9fae0783b31d0f9baa5 md-eval decide ...`
+`uvx --quiet --from git+https://github.com/ash-singh/md-eval@1c823be6ad08c97dfc99f05745e822c06816bbc2 md-eval decide ...`
 
 Write the decision to a temporary JSON file (or pipe it on stdin with `-`), then:
 
