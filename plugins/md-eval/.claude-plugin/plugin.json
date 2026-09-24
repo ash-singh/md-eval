@@ -1,6 +1,6 @@
 {
   "name": "md-eval",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "eval-docs skill: score Markdown docs for AI coding agent readiness and human readability with the md-eval CLI (TypeSafe Jev).",
   "author": {
     "name": "Ashwani Singh",
